@@ -1,0 +1,36 @@
+name: Scheduled Job Crawling
+
+on:
+  schedule:
+    - cron: '0 0 * * *'  # Every day at 00:00 UTC (9:00 AM KST)
+  workflow_dispatch:      # Allow manual trigger
+
+jobs:
+  crawl:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        run: |
+          cd app
+          npm install
+
+      - name: Install Playwright Browsers
+        run: |
+          cd app
+          npx playwright install chromium --with-deps
+
+      - name: Run Crawler
+        env:
+          EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          cd app
+          node crawl-job-offers.mjs
