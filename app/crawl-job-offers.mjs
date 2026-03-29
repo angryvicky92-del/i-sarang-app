@@ -14,6 +14,9 @@ async function crawl() {
   const context = await browser.newContext({
     userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
     viewport: { width: 1920, height: 1080 },
+    locale: 'ko-KR',
+    timezoneId: 'Asia/Seoul',
+    ignoreHTTPSErrors: true,
     extraHTTPHeaders: {
       'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
       'Sec-Ch-Ua': '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
@@ -67,7 +70,7 @@ async function crawl() {
     console.log(`[!] Table not found. Title: ${await page.title()}`);
     console.log('--- INITIAL HTML DUMP START ---');
     const initHtml = await page.evaluate(() => document.body.innerHTML || '');
-    console.log(initHtml.substring(0, 3000));
+    console.log(initHtml.length > 3000 ? initHtml.substring(initHtml.length - 3000) : initHtml);
     console.log('--- INITIAL HTML DUMP END ---');
     console.log('Trying Search fallback...');
     await page.keyboard.press('Enter');
@@ -89,7 +92,7 @@ async function crawl() {
       console.log('Main list table missing. Dumping page body for remote debugging...');
       const bodyHtml = await page.evaluate(() => document.body.innerHTML || '');
       console.log('--- HTML DUMP START ---');
-      console.log(bodyHtml.substring(0, 3000));
+      console.log(bodyHtml.length > 3000 ? bodyHtml.substring(bodyHtml.length - 3000) : bodyHtml);
       console.log('--- HTML DUMP END ---');
       
       console.log('Refreshing list page...');
