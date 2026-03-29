@@ -115,8 +115,19 @@ async function crawl() {
           }
           const viewCont = document.querySelector('.view_cont');
           if (viewCont) description = viewCont.innerText.trim();
+          
+          // Try to extract title explicitly from the detail page
+          const titleElem = document.querySelector('.view_title, h3, h4');
+          if (titleElem) metadata['채용제목'] = titleElem.innerText.trim();
+
           return { metadata, content: description };
         });
+
+        const fullCenterName = result.metadata['어린이집명'] || result.metadata['기관명'] || result.metadata['시설명'];
+        if (fullCenterName) job.center_name = fullCenterName;
+
+        const fullTitle = result.metadata['채용제목'] || result.metadata['제목'] || result.metadata['모집제목'];
+        if (fullTitle) job.title = fullTitle;
 
         // Deduplicate: Check if a job with same center, title and deadline exists
         const { data: existing } = await supabase
