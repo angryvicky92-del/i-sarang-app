@@ -37,10 +37,28 @@ async function crawl() {
   });
 
   console.log('Navigating to portal list...');
-  await page.goto('https://central.childcare.go.kr/ccef/job/JobOfferSlPL.jsp?flag=SlPL', { 
-    waitUntil: 'load', 
-    timeout: 60000 
-  });
+  let retryCount = 0;
+  let navSuccess = false;
+  while (retryCount < 5) {
+    try {
+      await page.goto('https://central.childcare.go.kr/ccef/job/JobOfferSlPL.jsp?flag=SlPL', { 
+        waitUntil: 'domcontentloaded', 
+        timeout: 60000 
+      });
+      navSuccess = true;
+      break;
+    } catch (e) {
+      console.log(`Navigation retry ${retryCount + 1} failed: ${e.message}`);
+      retryCount++;
+      await page.waitForTimeout(5000);
+    }
+  }
+
+  if (!navSuccess) {
+    console.error('Failed to navigate to the portal list after multiple retries. It is possible the GitHub Actions IP is being blocked by the Korean government firewall.');
+    await browser.close();
+    process.exit(1);
+  }
 
   // Initial table check
   try {
