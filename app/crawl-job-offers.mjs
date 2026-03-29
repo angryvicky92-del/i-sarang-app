@@ -65,6 +65,10 @@ async function crawl() {
     await page.waitForSelector('.list01', { timeout: 20000 });
   } catch (e) {
     console.log(`[!] Table not found. Title: ${await page.title()}`);
+    console.log('--- INITIAL HTML DUMP START ---');
+    const initHtml = await page.evaluate(() => document.body.innerHTML || '');
+    console.log(initHtml.substring(0, 3000));
+    console.log('--- INITIAL HTML DUMP END ---');
     console.log('Trying Search fallback...');
     await page.keyboard.press('Enter');
     await page.waitForTimeout(5000);
@@ -82,7 +86,13 @@ async function crawl() {
     try {
       await page.waitForSelector('.list01 tbody tr', { timeout: 20000 });
     } catch (e) {
-      console.log('Main list table missing. Refreshing...');
+      console.log('Main list table missing. Dumping page body for remote debugging...');
+      const bodyHtml = await page.evaluate(() => document.body.innerHTML || '');
+      console.log('--- HTML DUMP START ---');
+      console.log(bodyHtml.substring(0, 3000));
+      console.log('--- HTML DUMP END ---');
+      
+      console.log('Refreshing list page...');
       await page.goto('https://central.childcare.go.kr/ccef/job/JobOfferSlPL.jsp?flag=SlPL', { waitUntil: 'load' });
       await page.waitForTimeout(5000);
       await page.waitForSelector('.list01 tbody tr', { timeout: 20000 });
