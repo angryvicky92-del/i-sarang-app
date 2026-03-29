@@ -160,75 +160,53 @@ async function crawl() {
 
     if (totalSaved >= targetCount) break;
 
-    // Go to next page
-    currentPage++;
+    // Go to next page (Relative Sibling Navigation)
     try {
-      console.log(`Searching for page ${currentPage} button...`);
+      console.log('Searching for the next page link...');
+      await page.bringToFront();
       await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-      await page.waitForTimeout(1500);
-
-      // Check if we are ALREADY on the target page (e.g. after 'Next' group click)
-      const activeNum = await page.evaluate(() => {
-        const strong = document.querySelector('.paging strong');
-        return strong ? strong.innerText.trim() : '';
-      });
-
-      if (activeNum === String(currentPage)) {
-        console.log(`Already on page ${currentPage} (active). No click needed.`);
-        continue;
+      
+      try {
+        await page.waitForSelector('.paging', { timeout: 10000 });
+      } catch (e) {
+        console.log('Paging container not found. Re-scrolling...');
+        await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+        await page.waitForTimeout(2000);
       }
 
-      const pageSelector = `a[href="#page_${currentPage}"]`;
-      const pageBtn = page.locator(pageSelector).first();
-      
-      if (await pageBtn.count() > 0) {
-        console.log(`Clicking page ${currentPage}...`);
-        await pageBtn.scrollIntoViewIfNeeded();
-        await pageBtn.click();
-        await page.waitForTimeout(3000);
-      } else {
-        console.log(`Page ${currentPage} button not found. Checking for 'Next' button...`);
-        const nextGroupBtn = page.locator('a.next[href="#page_next"]').first();
-        if (await nextGroupBtn.count() > 0) {
-          console.log(`Clicking Next Group button...`);
-          await nextGroupBtn.scrollIntoViewIfNeeded();
-          await nextGroupBtn.click();
-          await page.waitForTimeout(6000); // Wait longer for new page numbers to load
-          
-          await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-          await page.waitForTimeout(1000);
-
-          // Re-check if group click landed us on target page
-          const newActiveNum = await page.evaluate(() => {
-            const paging = document.querySelector('.paging');
-            if (!paging) return '';
-            const strong = paging.querySelector('strong');
-            if (strong && /^\d+$/.test(strong.innerText.trim())) {
-              return strong.innerText.trim();
+      const navResult = await page.evaluate(() => {
+        const paging = document.querySelector('.paging');
+        if (!paging) return { action: 'stop', error: 'No paging div' };
+        
+        const active = paging.querySelector('strong');
+        if (!active) return { action: 'stop', error: 'No active page (strong) found' };
+        
+        let sibling = active.nextElementSibling;
+        while (sibling) {
+          if (sibling.tagName === 'A') {
+            const href = sibling.getAttribute('href') || '';
+            if (href.startsWith('#page_') && !sibling.classList.contains('next')) {
+              return { action: 'click', selector: `.paging a[href="${href}"]`, type: 'numeric' };
             }
-            return '';
-          });
-
-          console.log(`Detected active page after 'Next' click: ${newActiveNum}`);
-
-          if (newActiveNum === String(currentPage)) {
-            console.log(`Landed on page ${currentPage} after Next button. Perfect. Continuing.`);
-            continue;
+            if (sibling.classList.contains('next') && href === '#page_next') {
+              return { action: 'click', selector: '.paging a.next[href="#page_next"]', type: 'group' };
+            }
           }
-
-          const retryPageBtn = page.locator(pageSelector).first();
-          if (await retryPageBtn.count() > 0) {
-            console.log(`Found page ${currentPage} in next group, clicking...`);
-            await retryPageBtn.click();
-            await page.waitForTimeout(3000);
-          } else {
-            console.log(`Page ${currentPage} (active=${newActiveNum}) still not found as link. Stopping.`);
-            break;
-          }
-        } else {
-          console.log(`Reached end of results at page ${currentPage - 1}.`);
-          break;
+          sibling = sibling.nextElementSibling;
         }
+        return { action: 'stop', error: 'No more numeric or group buttons' };
+      });
+
+      if (navResult.action === 'click') {
+        console.log(`Navigating: ${navResult.type} click on ${navResult.selector}`);
+        const btn = page.locator(navResult.selector).first();
+        await btn.scrollIntoViewIfNeeded();
+        await btn.click();
+        await page.waitForTimeout(6000); 
+        currentPage++; 
+      } else {
+        console.log(`Finished: ${navResult.error}`);
+        break;
       }
     } catch (e) {
       console.log('Paging error:', e.message);
@@ -240,4 +218,7 @@ async function crawl() {
   console.log('Crawling finished.');
 }
 
-crawl();
+crawl().catch(err => {
+  console.error('Fatal error:', err);
+  process.exit(1);
+});
