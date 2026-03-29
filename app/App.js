@@ -65,7 +65,7 @@ export default function App() {
             <Stack.Screen 
               name="Detail" 
               component={CenterDetailScreen} 
-              options={{ headerShown: true, title: '어린이집 상세' }} 
+              options={{ headerShown: false, title: '어린이집 상세' }} 
             />
             <Stack.Screen 
               name="Login" 

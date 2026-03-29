@@ -1,13 +1,16 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, SafeAreaView, Dimensions, TouchableOpacity, ActivityIndicator, Linking, Alert } from 'react-native';
+import React, { useState, useEffect, useLayoutEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, SafeAreaView, Dimensions, TouchableOpacity, ActivityIndicator, Linking, Alert, TextInput, Platform } from 'react-native';
 import { PieChart } from 'react-native-chart-kit';
 import KakaoRoadview from '../components/KakaoRoadview';
 import { SIDO_LIST } from '../services/dataService';
-import { Star, Briefcase, ChevronRight, Heart } from 'lucide-react-native';
+import { Star, Briefcase, ChevronRight, Heart, ChevronLeft } from 'lucide-react-native';
 import { useAuth } from '../contexts/AuthContext';
 import { useSearch } from '../contexts/SearchContext';
 import { supabase } from '../services/supabaseClient';
-import ReviewModal from '../components/ReviewModal';
+import { getReviews, createReview } from '../services/reviewService';
+import { getMyVotes } from '../services/engagementService';
+import EngagementButtons from '../components/EngagementButtons';
+import { User, Calendar, MessageSquare, Star as StarIcon, Send, LogIn } from 'lucide-react-native';
 
 const screenWidth = Dimensions.get('window').width;
 
@@ -44,41 +47,48 @@ const formatOfficeName = (officeStr) => {
 export default function CenterDetailScreen({ route, navigation }) {
   const { daycare } = route.params;
   const { profile } = useAuth();
-  const { isFavorited, toggleFavorite } = useSearch();
+  const { isFavorited, toggleFavorite, allJobs } = useSearch();
+
+  useLayoutEffect(() => {
+    navigation.setOptions({ headerShown: false });
+  }, [navigation]);
+
   const [activeTab, setActiveTab] = useState('기본정보');
   const [jobOffers, setJobOffers] = useState([]);
-  const [isReviewModalVisible, setIsReviewModalVisible] = useState(false);
+  const [reviews, setReviews] = useState([]);
+  const [userReviewVotes, setUserReviewVotes] = useState({});
+  const [reviewsLoading, setReviewsLoading] = useState(false);
+  const [newReviewRating, setNewReviewRating] = useState(5);
+  const [newReviewContent, setNewReviewContent] = useState('');
+  const [isSubmittingReview, setIsSubmittingReview] = useState(false);
 
   useEffect(() => {
     fetchRelatedJobs();
-  }, []);
+    fetchCenterReviews();
+  }, [daycare.stcode, allJobs]);
+
+  const fetchCenterReviews = async () => {
+    setReviewsLoading(true);
+    try {
+      const data = await getReviews(daycare.stcode, profile?.id);
+      setReviews(data || []);
+      
+      if (profile && data && data.length > 0) {
+        const votes = await getMyVotes('review', data.map(r => r.id), profile.id);
+        setUserReviewVotes(votes);
+      }
+    } catch (e) {
+      console.warn('Failed to fetch reviews', e);
+    } finally {
+      setReviewsLoading(false);
+    }
+  };
 
   const fetchRelatedJobs = async () => {
     try {
-      const normalize = (n) => n.replace(/\s/g, '').replace(/\(.*\)/g, '');
-      const searchName = normalize(daycare.name);
-      
-      // Extract district (e.g., "서구", "강남구") for strict matching
-      const districtMatch = daycare.office ? daycare.office.split(' ')[1] : null;
-
-      const { data, error } = await supabase
-        .from('job_offers')
-        .select('*');
-      
-      if (data) {
-        // Filter: Normalized Name Match + District Check (if office info exists)
-        const matched = data.filter(job => {
-          const jobNameNorm = normalize(job.center_name);
-          const isNameMatch = jobNameNorm.includes(searchName) || searchName.includes(jobNameNorm);
-          
-          if (!districtMatch) return isNameMatch;
-          
-          // Double check with location if available
-          const isDistrictMatch = job.location ? job.location.includes(districtMatch) : true;
-          return isNameMatch && isDistrictMatch;
-        });
-        setJobOffers(matched);
-      }
+      const { isJobMatchingDaycare } = require('../services/dataService');
+      const matched = (allJobs || []).filter(job => isJobMatchingDaycare(job, daycare));
+      setJobOffers(matched);
     } catch (e) {
       console.warn('Failed to fetch matched jobs', e);
     }
@@ -93,11 +103,64 @@ export default function CenterDetailScreen({ route, navigation }) {
   const totalTeachers = daycare.teacherCount || 5;
   const tBreak = daycare.tenureBreakdown || {};
   
+  const handleReviewSubmit = async () => {
+    if (!profile) {
+      Alert.alert('알림', '로그인이 필요합니다.', [{ text: '취소', style: 'cancel' }, { text: '로그인', onPress: () => navigation.navigate('Login') }]);
+      return;
+    }
+    if (!newReviewContent.trim()) {
+      Alert.alert('알림', '후기 내용을 입력해 주세요.');
+      return;
+    }
+
+    setIsSubmittingReview(true);
+    try {
+      const reviewData = {
+        user_id: profile.id,
+        center_id: daycare.stcode,
+        rating: newReviewRating,
+        content: newReviewContent,
+      };
+
+      const result = await createReview(reviewData);
+      if (result) {
+        Alert.alert('성공', '후기가 등록되었습니다.');
+        setNewReviewContent('');
+        setNewReviewRating(5);
+        fetchCenterReviews();
+      } else {
+        Alert.alert('오류', '후기 등록에 실패했습니다.');
+      }
+    } catch (e) {
+      console.error('Submit review error:', e);
+      Alert.alert('오류', '알 수 없는 오류가 발생했습니다.');
+    } finally {
+      setIsSubmittingReview(false);
+    }
+  };
+
   const popY0 = Math.round(totalTeachers * ((tBreak.y0 || 0)/100));
   const popY1 = Math.round(totalTeachers * ((tBreak.y1 || 0)/100));
   const popY2 = Math.round(totalTeachers * ((tBreak.y2 || 0)/100));
   const popY4 = Math.round(totalTeachers * ((tBreak.y4 || 0)/100));
   const popY6 = Math.round(totalTeachers * ((tBreak.y6 || 0)/100));
+
+  // Calculate Average Ratings from Reviews
+  const { parentAvg, teacherAvg } = React.useMemo(() => {
+    const parentReviews = reviews.filter(r => r.profiles?.user_type !== '선생님');
+    const teacherReviews = reviews.filter(r => r.profiles?.user_type === '선생님');
+    
+    const calc = (list) => {
+      if (list.length === 0) return '0.0';
+      const sum = list.reduce((acc, curr) => acc + curr.rating, 0);
+      return (sum / list.length).toFixed(1);
+    };
+
+    return {
+      parentAvg: calc(parentReviews),
+      teacherAvg: calc(teacherReviews)
+    };
+  }, [reviews]);
 
   const tenureData = [
     { name: `1년미만 (${popY0}명)`, population: popY0, color: '#3B82F6', legendFontColor: '#334155', legendFontSize: 12 },
@@ -179,7 +242,7 @@ export default function CenterDetailScreen({ route, navigation }) {
             return (
               <View key={age} style={styles.tableRow}>
                 <Text style={styles.td}>만 {age}세</Text>
-                <Text style={styles.td}>{current}/- 명</Text>
+                <Text style={styles.td}>{current}명</Text>
                 <Text style={styles.td}>{waitlist}명</Text>
               </View>
             );
@@ -243,31 +306,125 @@ export default function CenterDetailScreen({ route, navigation }) {
   const renderReviews = () => {
     return (
       <View style={styles.tabContent}>
-        <View style={styles.reviewPlaceholder}>
-          <Text style={styles.reviewPlaceholderTitle}>후기 게시판</Text>
-          <Text style={styles.reviewPlaceholderDesc}>아직 등록된 후기가 없습니다. 첫 후기를 작성해 보세요!</Text>
-            <TouchableOpacity 
-              style={styles.writeReviewBtn} 
-              onPress={() => {
-                if (!profile) {
-                  Alert.alert('알림', '로그인이 필요합니다.', [
-                    { text: '취소', style: 'cancel' },
-                    { text: '로그인', onPress: () => navigation.navigate('MyPage') }
-                  ]);
-                } else {
-                  setIsReviewModalVisible(true);
-                }
-              }}
-            >
-              <Text style={styles.writeReviewText}>후기 작성하기</Text>
-            </TouchableOpacity>
+        <View style={styles.sectionHeaderRow}>
+          <Text style={styles.sectionTitle}>학부모 & 선생님 후기 ({reviews.length})</Text>
         </View>
+
+        {/* Embedded Review Input Section */}
+        {profile ? (
+          <View style={styles.reviewInputSection}>
+            <View style={styles.ratingSelectRow}>
+              <Text style={styles.ratingLabelSmall}>기본 평점 선택</Text>
+              <View style={styles.starsRowSmall}>
+                {[1, 2, 3, 4, 5].map(num => (
+                  <TouchableOpacity key={num} onPress={() => setNewReviewRating(num)}>
+                    <StarIcon 
+                      size={24} 
+                      color={num <= newReviewRating ? '#FACC15' : '#E2E8F0'} 
+                      fill={num <= newReviewRating ? '#FACC15' : 'transparent'} 
+                    />
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <Text style={styles.ratingTextSmall}>{newReviewRating}점</Text>
+            </View>
+
+            <View style={styles.inputWrapper}>
+              <TextInput
+                style={styles.newReviewInput}
+                placeholder="어린이집에 대한 솔직한 후기를 남겨주세요."
+                placeholderTextColor="#94A3B8"
+                multiline
+                numberOfLines={3}
+                value={newReviewContent}
+                onChangeText={setNewReviewContent}
+                textAlignVertical="top"
+              />
+              <TouchableOpacity 
+                style={[styles.submitReviewBtn, (!newReviewContent.trim() || isSubmittingReview) && styles.submitReviewBtnDisabled]} 
+                onPress={handleReviewSubmit}
+                disabled={isSubmittingReview}
+              >
+                {isSubmittingReview ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Send size={18} color="#fff" />
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : (
+          <View style={styles.loginPromptBox}>
+            <LogIn size={20} color="#64748B" />
+            <Text style={styles.loginPromptText}>후기를 작성하려면 로그인이 필요합니다.</Text>
+            <TouchableOpacity onPress={() => navigation.navigate('Login')}>
+              <Text style={styles.loginLinkText}>로그인하기</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {reviewsLoading ? (
+          <ActivityIndicator color="#75BA57" style={{ marginVertical: 32 }} />
+        ) : reviews.length === 0 ? (
+          <View style={styles.reviewPlaceholder}>
+            <MessageSquare size={48} color="#CBD5E1" />
+            <Text style={styles.reviewPlaceholderDesc}>아직 등록된 후기가 없습니다. 첫 후기를 작성해 보세요!</Text>
+          </View>
+        ) : (
+          reviews.map((review) => (
+            <View key={review.id} style={styles.reviewItem}>
+              <View style={styles.reviewHeader}>
+                <View style={styles.reviewAuthorBox}>
+                  <View style={[styles.userTypeBadge, { backgroundColor: review.profiles?.user_type === '선생님' ? '#FEF2F2' : '#EFF6FF' }]}>
+                    <Text style={[styles.userTypeBadgeText, { color: review.profiles?.user_type === '선생님' ? '#DC2626' : '#2563EB' }]}>{review.profiles?.user_type || '학부모'}</Text>
+                  </View>
+                  <Text style={styles.reviewAuthor}>{review.profiles?.nickname || '익명 사용자'}</Text>
+                </View>
+                <View style={styles.reviewRatingBox}>
+                  {[1,2,3,4,5].map(star => (
+                    <StarIcon key={star} size={14} color={star <= review.rating ? '#FACC15' : '#E2E8F0'} fill={star <= review.rating ? '#FACC15' : 'transparent'} />
+                  ))}
+                  <Text style={styles.reviewDate}>{new Date(review.created_at).toLocaleDateString()}</Text>
+                </View>
+              </View>
+              <Text style={styles.reviewContent}>{review.content}</Text>
+              
+              <View style={styles.reviewEngagement}>
+                <EngagementButtons 
+                  targetType="review" 
+                  targetId={review.id} 
+                  item={review} 
+                  userVote={userReviewVotes[review.id] || 0} 
+                  userId={profile?.id}
+                  onUpdate={(updatedData) => {
+                    setReviews(prev => prev.map(r => r.id === review.id ? { ...r, ...updatedData } : r));
+                    setUserReviewVotes(prev => ({ ...prev, [review.id]: updatedData.userVote }));
+                  }}
+                />
+              </View>
+            </View>
+          ))
+        )}
       </View>
     );
   };
 
   return (
     <SafeAreaView style={styles.container}>
+      <View style={styles.header}>
+        <View style={styles.headerLeft}>
+          <TouchableOpacity 
+            onPress={() => navigation.goBack()} 
+            style={styles.backBtn}
+            hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
+          >
+            <ChevronLeft size={24} color="#1E293B" />
+          </TouchableOpacity>
+        </View>
+        <Text style={styles.headerTitle} numberOfLines={1}>어린이집 상세</Text>
+        <View style={styles.headerRight} />
+      </View>
+
       <ScrollView contentContainerStyle={styles.scroll}>
         
         <View style={styles.roadviewWrapper}>
@@ -295,7 +452,7 @@ export default function CenterDetailScreen({ route, navigation }) {
               <Text style={styles.ratingLabel}>학부모 평점</Text>
               <View style={styles.starRow}>
                 <Star size={16} color="#75BA57" fill="#75BA57" />
-                <Text style={styles.ratingScore}>{daycare.parentRating || '4.5'}</Text>
+                <Text style={styles.ratingScore}>{parentAvg}</Text>
               </View>
             </View>
             <View style={styles.ratingDivider} />
@@ -303,7 +460,7 @@ export default function CenterDetailScreen({ route, navigation }) {
               <Text style={styles.ratingLabel}>선생님 평점</Text>
               <View style={styles.starRow}>
                 <Star size={16} color="#4A6CF7" fill="#4A6CF7" />
-                <Text style={styles.ratingScore}>{daycare.teacherRating || '4.2'}</Text>
+                <Text style={styles.ratingScore}>{teacherAvg}</Text>
               </View>
             </View>
           </View>
@@ -335,17 +492,6 @@ export default function CenterDetailScreen({ route, navigation }) {
           </View>
         )}
 
-        <ReviewModal 
-          visible={isReviewModalVisible}
-          onClose={() => setIsReviewModalVisible(false)}
-          daycare={daycare}
-          user={profile}
-          onSuccess={() => {
-            setIsReviewModalVisible(false);
-            Alert.alert('알림', '후기가 성공적으로 등록되었습니다.');
-            // Optional: Fetch reviews if needed
-          }}
-        />
       </ScrollView>
     </SafeAreaView>
   );
@@ -360,6 +506,11 @@ const InfoRow = ({ label, value, highlight }) => (
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F1F5F9' },
+  header: { height: 60, flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#E2E8F0', paddingHorizontal: 4 },
+  headerLeft: { width: 48, alignItems: 'center', justifyContent: 'center' },
+  headerRight: { width: 48, alignItems: 'center', justifyContent: 'center' },
+  backBtn: { padding: 8 },
+  headerTitle: { fontSize: 16, fontWeight: '800', color: '#1E293B', flex: 1, textAlign: 'center' },
   scroll: { paddingBottom: 40 },
   roadviewWrapper: { width: '100%', height: 200 },
   favBtn: { 
@@ -415,11 +566,20 @@ const styles = StyleSheet.create({
   tableRow: { flexDirection: 'row', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
   th: { flex: 1, textAlign: 'center', fontWeight: 'bold', color: '#475569', fontSize: 13 },
   td: { flex: 1, textAlign: 'center', color: '#1E293B', fontSize: 14, fontWeight: '600' },
-  reviewPlaceholder: { backgroundColor: '#fff', padding: 30, borderRadius: 16, alignItems: 'center' },
-  reviewPlaceholderTitle: { fontSize: 18, fontWeight: 'bold', color: '#1E293B', marginBottom: 8 },
-  reviewPlaceholderDesc: { fontSize: 14, color: '#64748B', textAlign: 'center', marginBottom: 20, lineHeight: 20 },
-  writeReviewBtn: { backgroundColor: '#75BA57', paddingHorizontal: 20, paddingVertical: 12, borderRadius: 20 },
-  writeReviewText: { color: '#fff', fontWeight: 'bold' },
+  reviewPlaceholder: { backgroundColor: '#fff', padding: 40, borderRadius: 16, alignItems: 'center', marginTop: 10 },
+  reviewPlaceholderDesc: { fontSize: 14, color: '#94A3B8', textAlign: 'center', marginTop: 16 },
+  writeReviewBtnHeader: { backgroundColor: '#F0F9EB', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#DCF3D1' },
+  writeReviewHeaderText: { color: '#75BA57', fontSize: 13, fontWeight: 'bold' },
+  reviewItem: { backgroundColor: '#fff', padding: 20, borderRadius: 16, marginBottom: 12, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  reviewHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 },
+  reviewAuthorBox: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  userTypeBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+  userTypeBadgeText: { fontSize: 10, fontWeight: 'bold' },
+  reviewAuthor: { fontSize: 14, fontWeight: 'bold', color: '#1E293B' },
+  reviewRatingBox: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  reviewDate: { fontSize: 11, color: '#94A3B8', marginLeft: 6 },
+  reviewContent: { fontSize: 14, color: '#475569', lineHeight: 22, marginBottom: 12 },
+  reviewEngagement: { alignItems: 'flex-end' },
   bottomFooter: { padding: 16, marginTop: 10, paddingBottom: 40 },
   applyBtn: { backgroundColor: '#16A34A', padding: 18, borderRadius: 16, alignItems: 'center', shadowColor: '#16A34A', shadowOpacity: 0.2, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }, elevation: 4 },
   applyBtnText: { color: '#fff', fontSize: 16, fontWeight: '900' },
@@ -430,5 +590,19 @@ const styles = StyleSheet.create({
   jobIconBox: { width: 40, height: 40, borderRadius: 10, backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
   jobTextContent: { flex: 1 },
   jobTitle: { fontSize: 15, fontWeight: '700', color: '#1E293B', marginBottom: 2 },
-  jobMeta: { fontSize: 13, color: '#64748B' }
+  jobMeta: { fontSize: 13, color: '#64748B' },
+  
+  // Embedded Review Input Styles
+  reviewInputSection: { backgroundColor: '#fff', padding: 16, borderRadius: 16, marginBottom: 20, borderWidth: 1, borderColor: '#E2E8F0', shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 8, elevation: 1 },
+  ratingSelectRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 16, gap: 12 },
+  ratingLabelSmall: { fontSize: 13, fontWeight: 'bold', color: '#64748B' },
+  starsRowSmall: { flexDirection: 'row', gap: 6 },
+  ratingTextSmall: { fontSize: 13, fontWeight: '900', color: '#FACC15', marginLeft: 4 },
+  inputWrapper: { flexDirection: 'row', gap: 10, alignItems: 'flex-end' },
+  newReviewInput: { flex: 1, backgroundColor: '#F8FAFC', borderRadius: 12, padding: 12, fontSize: 14, color: '#1E293B', borderWidth: 1, borderColor: '#F1F5F9', minHeight: 80 },
+  submitReviewBtn: { width: 44, height: 44, borderRadius: 12, backgroundColor: '#75BA57', justifyContent: 'center', alignItems: 'center' },
+  submitReviewBtnDisabled: { backgroundColor: '#CBD5E1' },
+  loginPromptBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8FAFC', padding: 16, borderRadius: 12, marginBottom: 20, borderWidth: 1, borderStyle: 'dashed', borderColor: '#CBD5E1', gap: 10 },
+  loginPromptText: { flex: 1, fontSize: 13, color: '#64748B', fontWeight: '500' },
+  loginLinkText: { fontSize: 13, color: '#75BA57', fontWeight: 'bold', textDecorationLine: 'underline' }
 });
