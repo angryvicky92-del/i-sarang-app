@@ -184,12 +184,12 @@ async function crawl() {
 
           // Re-check if group click landed us on target page
           const newActiveNum = await page.evaluate(() => {
-            const paging = document.querySelector('.paging') || document.querySelector('#contents');
+            const paging = document.querySelector('.paging');
             if (!paging) return '';
             const strong = paging.querySelector('strong');
-            if (strong) return strong.innerText.trim();
-            const active = paging.querySelector('.active');
-            if (active) return active.innerText.trim();
+            if (strong && /^\d+$/.test(strong.innerText.trim())) {
+              return strong.innerText.trim();
+            }
             return '';
           });
 
