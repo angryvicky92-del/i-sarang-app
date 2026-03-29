@@ -118,7 +118,16 @@ async function crawl() {
           return { metadata, content: description };
         });
 
-        await supabase.from('job_offers').upsert({
+        // Deduplicate: Check if a job with same center, title and deadline exists
+        const { data: existing } = await supabase
+          .from('job_offers')
+          .select('id, external_id')
+          .eq('center_name', job.center_name)
+          .eq('title', job.title)
+          .eq('deadline', job.deadline)
+          .maybeSingle();
+
+        const jobData = {
           external_id: job.joseq,
           center_type: job.center_type,
           title: job.title,
@@ -131,7 +140,14 @@ async function crawl() {
           content: result.content,
           metadata: result.metadata,
           created_at: new Date().toISOString()
-        }, { onConflict: 'external_id' });
+        };
+
+        if (existing) {
+          console.log(`[!] Updating existing job ${existing.id} (was ${existing.external_id}, now ${job.joseq})`);
+          await supabase.from('job_offers').update(jobData).eq('id', existing.id);
+        } else {
+          await supabase.from('job_offers').upsert(jobData, { onConflict: 'external_id' });
+        }
 
         totalSaved++;
         console.log(`[${totalSaved}] Saved ${job.title} (${job.center_name})`);
