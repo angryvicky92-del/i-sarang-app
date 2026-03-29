@@ -22,7 +22,10 @@ async function crawl() {
       'Sec-Ch-Ua': '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
       'Sec-Ch-Ua-Mobile': '?0',
       'Sec-Ch-Ua-Platform': '"Windows"',
-      'Referer': 'https://central.childcare.go.kr/'
+      'Referer': 'https://central.childcare.go.kr/',
+      'X-Forwarded-For': '121.168.12.12',
+      'X-Real-IP': '121.168.12.12',
+      'Client-IP': '121.168.12.12'
     }
   });
 
