@@ -65,13 +65,12 @@ async function crawl() {
 
   // Initial table check
   try {
-    await page.waitForSelector('.list01', { timeout: 20000 });
+    await page.waitForFunction(() => {
+      const tables = Array.from(document.querySelectorAll('table'));
+      return tables.some(t => t.innerText.includes('어린이집명') && t.innerText.includes('마감일'));
+    }, { timeout: 20000 });
   } catch (e) {
     console.log(`[!] Table not found. Title: ${await page.title()}`);
-    console.log('--- INITIAL HTML DUMP START ---');
-    const initHtml = await page.evaluate(() => document.body.innerHTML || '');
-    console.log(initHtml.length > 3000 ? initHtml.substring(initHtml.length - 3000) : initHtml);
-    console.log('--- INITIAL HTML DUMP END ---');
     console.log('Trying Search fallback...');
     await page.keyboard.press('Enter');
     await page.waitForTimeout(5000);
@@ -87,7 +86,10 @@ async function crawl() {
     
     // Ensure table is present
     try {
-      await page.waitForSelector('.list01 tbody tr', { timeout: 20000 });
+      await page.waitForFunction(() => {
+        const tables = Array.from(document.querySelectorAll('table'));
+        return tables.some(t => t.innerText.includes('어린이집명') && t.innerText.includes('마감일') && t.querySelectorAll('tbody tr').length > 0);
+      }, { timeout: 20000 });
     } catch (e) {
       console.log('Main list table missing. Dumping page body for remote debugging...');
       const bodyHtml = await page.evaluate(() => document.body.innerHTML || '');
@@ -98,11 +100,18 @@ async function crawl() {
       console.log('Refreshing list page...');
       await page.goto('https://central.childcare.go.kr/ccef/job/JobOfferSlPL.jsp?flag=SlPL', { waitUntil: 'load' });
       await page.waitForTimeout(5000);
-      await page.waitForSelector('.list01 tbody tr', { timeout: 20000 });
+      await page.waitForFunction(() => {
+        const tables = Array.from(document.querySelectorAll('table'));
+        return tables.some(t => t.innerText.includes('어린이집명') && t.innerText.includes('마감일') && t.querySelectorAll('tbody tr').length > 0);
+      }, { timeout: 20000 });
     }
 
     const pageJobs = await page.evaluate(() => {
-      const rows = Array.from(document.querySelectorAll('.list01 tbody tr'));
+      const tables = Array.from(document.querySelectorAll('table'));
+      const jobTable = tables.find(t => t.innerText.includes('어린이집명') && t.innerText.includes('마감일'));
+      if (!jobTable) return [];
+
+      const rows = Array.from(jobTable.querySelectorAll('tbody tr'));
       return rows.map(row => {
         const tds = Array.from(row.querySelectorAll('td'));
         if (tds.length < 8) return null;
