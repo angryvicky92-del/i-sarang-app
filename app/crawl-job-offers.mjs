@@ -12,125 +12,69 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
 async function crawl() {
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext({
-    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-    viewport: { width: 1920, height: 1080 },
-    locale: 'ko-KR',
-    timezoneId: 'Asia/Seoul',
-    ignoreHTTPSErrors: true,
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
     extraHTTPHeaders: {
       'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
-      'Sec-Ch-Ua': '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
-      'Sec-Ch-Ua-Mobile': '?0',
-      'Sec-Ch-Ua-Platform': '"Windows"',
-      'Referer': 'https://central.childcare.go.kr/',
-      'X-Forwarded-For': '121.168.12.12',
-      'X-Real-IP': '121.168.12.12',
-      'Client-IP': '121.168.12.12'
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7'
     }
   });
-
   const page = await context.newPage();
   
-  // Stealth: remove webdriver flag
-  await page.addInitScript(() => {
-    Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-  });
-
-  // Handle popups
-  page.on('dialog', async d => { 
-    console.log(`[Alert] ${d.message()}`); 
-    await d.dismiss(); 
-  });
-
   console.log('Navigating to portal list...');
   let retryCount = 0;
-  let navSuccess = false;
   while (retryCount < 5) {
     try {
       await page.goto('https://central.childcare.go.kr/ccef/job/JobOfferSlPL.jsp?flag=SlPL', { 
-        waitUntil: 'domcontentloaded', 
+        waitUntil: 'load', 
         timeout: 60000 
       });
-      navSuccess = true;
       break;
     } catch (e) {
-      console.log(`Navigation retry ${retryCount + 1} failed: ${e.message}`);
+      console.log(`Navigation retry ${retryCount + 1}...`);
       retryCount++;
-      await page.waitForTimeout(5000);
+      await new Promise(r => setTimeout(r, 3000));
     }
   }
 
-  if (!navSuccess) {
-    console.error('Failed to navigate to the portal list after multiple retries. It is possible the GitHub Actions IP is being blocked by the Korean government firewall.');
-    await browser.close();
-    process.exit(1);
-  }
-
-  // Initial table check
   try {
-    await page.waitForFunction(() => {
-      const tables = Array.from(document.querySelectorAll('table'));
-      return tables.some(t => t.innerText.includes('어린이집명') && t.innerText.includes('마감일'));
-    }, { timeout: 20000 });
+    // URL with flag=SlPL usually loads list directly, but we wait for table to be sure
+    await page.waitForSelector('table tbody tr', { timeout: 10000 });
   } catch (e) {
-    console.log(`[!] Table not found. Title: ${await page.title()}`);
-    console.log('Trying Search fallback...');
-    await page.keyboard.press('Enter');
-    await page.waitForTimeout(5000);
+    console.log('Table not found, trying Search button click fallback...');
+    try {
+      const searchBtn = await page.locator('input[value="검색"], button:has-text("검색"), a:has-text("검색")').first();
+      await searchBtn.click();
+      await page.waitForSelector('table tbody tr', { timeout: 10000 });
+    } catch (e2) {
+      console.log('Final fallback: Enter key...');
+      await page.keyboard.press('Enter');
+      await page.waitForTimeout(3000);
+    }
   }
 
   const targetCount = 600;
-  let totalSaved = 0;
   let currentPage = 1;
-  const detailPage = await context.newPage();
+  let totalSaved = 0;
 
-  while (totalSaved < targetCount) {
-    console.log(`\n=== Processing Page ${currentPage} (Total Saved: ${totalSaved}) ===`);
+  while (totalSaved < targetCount && currentPage <= 60) {
+    console.log(`--- Processing Page ${currentPage} ---`);
     
-    // Ensure table is present
-    try {
-      await page.waitForFunction(() => {
-        const tables = Array.from(document.querySelectorAll('table'));
-        return tables.some(t => t.innerText.includes('어린이집명') && t.innerText.includes('마감일') && t.querySelectorAll('tbody tr').length > 0);
-      }, { timeout: 20000 });
-    } catch (e) {
-      console.log('Main list table missing. Dumping page body for remote debugging...');
-      const bodyHtml = await page.evaluate(() => document.body.innerHTML || '');
-      console.log('--- HTML DUMP START ---');
-      console.log(bodyHtml.length > 3000 ? bodyHtml.substring(bodyHtml.length - 3000) : bodyHtml);
-      console.log('--- HTML DUMP END ---');
-      
-      console.log('Refreshing list page...');
-      await page.goto('https://central.childcare.go.kr/ccef/job/JobOfferSlPL.jsp?flag=SlPL', { waitUntil: 'load' });
-      await page.waitForTimeout(5000);
-      await page.waitForFunction(() => {
-        const tables = Array.from(document.querySelectorAll('table'));
-        return tables.some(t => t.innerText.includes('어린이집명') && t.innerText.includes('마감일') && t.querySelectorAll('tbody tr').length > 0);
-      }, { timeout: 20000 });
-    }
-
-    const pageJobs = await page.evaluate(() => {
-      const tables = Array.from(document.querySelectorAll('table'));
-      const jobTable = tables.find(t => t.innerText.includes('어린이집명') && t.innerText.includes('마감일'));
-      if (!jobTable) return [];
-
-      const rows = Array.from(jobTable.querySelectorAll('tbody tr'));
-      return rows.map(row => {
-        const tds = Array.from(row.querySelectorAll('td'));
+    const pageJobs = await page.$$eval('table tbody tr', (trList) => {
+      return trList.map(tr => {
+        const tds = tr.querySelectorAll('td');
         if (tds.length < 8) return null;
         
         const titleLink = tds[2].querySelector('a');
-        if (!titleLink) return null;
+        const onclickText = titleLink ? titleLink.getAttribute('onclick') : '';
+        const joseqMatch = onclickText ? onclickText.match(/'(\d+)'/) : null;
+        const joseq = joseqMatch ? joseqMatch[1] : '';
+        const originalUrl = joseq ? `https://central.childcare.go.kr/ccef/job/JobOfferSl.jsp?flag=Sl&JOSEQ=${joseq}` : '';
         
-        const onclick = titleLink.getAttribute('onclick') || '';
-        const match = onclick.match(/goView\('([^']+)'\)/);
-        const joseq = match ? match[1] : '';
-        const originalUrl = `https://central.childcare.go.kr/ccef/job/JobOfferSlPV.jsp?joseq=${joseq}`;
-
         return {
-          title: titleLink.innerText.trim(),
-          center_type: tds[1].innerText.trim(), 
-          center_name: tds[3].innerText.trim(), 
+          external_id: joseq,
+          center_type: tds[1].innerText.trim(),
+          title: tds[2].innerText.trim(),
+          center_name: tds[3].innerText.trim(),
           position: tds[4].innerText.trim(),
           location: tds[5].innerText.trim(),
           deadline: tds[6].innerText.trim(),
@@ -141,33 +85,47 @@ async function crawl() {
       }).filter(x => x !== null && x.joseq !== '');
     });
 
-    console.log(`Found ${pageJobs.length} jobs. Scraping details...`);
+    console.log(`Found ${pageJobs.length} jobs on page ${currentPage}. Scraping details...`);
 
     for (const job of pageJobs) {
       if (totalSaved >= targetCount) break;
 
+      const detailPage = await context.newPage();
       try {
-        await detailPage.goto(job.original_url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+        await detailPage.goto(job.original_url, { waitUntil: 'load', timeout: 30000 });
+        await detailPage.waitForTimeout(500); 
         
         const result = await detailPage.evaluate(() => {
           const metadata = {};
           let description = '';
-          const table = document.querySelector('.view_table') || document.querySelector('.com_table table');
+          const table = document.querySelector('.com_table table') || document.querySelector('#contents table');
           if (table) {
             const rows = table.querySelectorAll('tr');
             rows.forEach(row => {
-              const ths = row.querySelectorAll('th');
-              const tds = row.querySelectorAll('td');
-              for(let i=0; i<ths.length; i++) {
-                const label = ths[i]?.innerText.trim();
-                const value = tds[i]?.innerText.trim();
-                if (label && label !== '제목') metadata[label] = value;
+              const thList = row.querySelectorAll('th');
+              const tdList = row.querySelectorAll('td');
+              if (thList.length > 0) {
+                for(let i=0; i<thList.length; i++) {
+                  const label = thList[i].innerText.trim();
+                  const value = tdList[i] ? tdList[i].innerText.trim() : '';
+                  if (label && label !== '제목' && label !== '등록자' && label !== '등록일') metadata[label] = value;
+                }
               }
             });
           }
-          description = document.querySelector('.view_content, .view_text, .view_cont, #viewForm')?.innerText?.trim() || '';
+          const viewCont = document.querySelector('.view_cont');
+          if (viewCont) description = viewCont.innerText.trim();
           return { metadata, content: description };
         });
+
+        // Deduplicate: Check if a job with same center, title and deadline exists
+        const { data: existing } = await supabase
+          .from('job_offers')
+          .select('id, external_id')
+          .eq('center_name', job.center_name)
+          .eq('title', job.title)
+          .eq('deadline', job.deadline)
+          .maybeSingle();
 
         const jobData = {
           external_id: job.joseq,
@@ -184,49 +142,41 @@ async function crawl() {
           created_at: new Date().toISOString()
         };
 
-        const { data: existing } = await supabase
-          .from('job_offers')
-          .select('id')
-          .eq('center_name', job.center_name)
-          .eq('title', job.title)
-          .eq('deadline', job.deadline)
-          .maybeSingle();
-
         if (existing) {
+          console.log(`[!] Updating existing job ${existing.id} (was ${existing.external_id}, now ${job.joseq})`);
           await supabase.from('job_offers').update(jobData).eq('id', existing.id);
-          console.log(`[!] Updated ${job.center_name}`);
         } else {
-          await supabase.from('job_offers').insert(jobData);
-          totalSaved++;
-          console.log(`[${totalSaved}] Saved ${job.title} (${job.center_name})`);
+          await supabase.from('job_offers').upsert(jobData, { onConflict: 'external_id' });
         }
+
+        totalSaved++;
+        console.log(`[${totalSaved}] Saved ${job.title} (${job.center_name})`);
       } catch (e) {
-        console.error(`Error scraping detail:`, e.message);
+        console.error(`Error scraping ${job.joseq}:`, e.message);
+      } finally {
+        await detailPage.close();
       }
-      await page.waitForTimeout(500); 
     }
 
     if (totalSaved >= targetCount) break;
 
-    // Next page logic
     try {
       console.log('Searching for the next page link...');
+      await page.bringToFront();
       await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
       
       try {
-        await page.waitForSelector('.paging, .pagination', { timeout: 15000 });
+        await page.waitForSelector('.paging, .pagination', { timeout: 10000 });
       } catch (e) {
-        console.log('Paging container missing. Saving debug screenshot...');
-        await page.screenshot({ path: '/tmp/paging_error_final.png' });
-        await page.evaluate(() => window.scrollBy(0, -200)); // Try slight scroll up
-        await page.waitForTimeout(3000);
+        console.log('Paging container not found. Re-scrolling...');
+        await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+        await page.waitForTimeout(2000);
       }
 
       const navResult = await page.evaluate(() => {
         const paging = document.querySelector('.paging') || document.querySelector('.pagination');
         if (!paging) return { action: 'stop', error: 'No paging div' };
         
-        const containerClass = paging.classList.contains('paging') ? 'paging' : 'pagination';
         const active = paging.querySelector('strong');
         if (!active) return { action: 'stop', error: 'No active page (strong) found' };
         
@@ -235,10 +185,10 @@ async function crawl() {
           if (sibling.tagName === 'A') {
             const href = sibling.getAttribute('href') || '';
             if (href.startsWith('#page_') && !sibling.classList.contains('next')) {
-              return { action: 'click', selector: `.${containerClass} a[href="${href}"]`, type: 'numeric' };
+              return { action: 'click', selector: `.paging a[href="${href}"], .pagination a[href="${href}"]`, type: 'numeric' };
             }
             if (sibling.classList.contains('next') && href === '#page_next') {
-              return { action: 'click', selector: `.${containerClass} a.next[href="#page_next"]`, type: 'group' };
+              return { action: 'click', selector: 'a.next[href="#page_next"]', type: 'group' };
             }
           }
           sibling = sibling.nextElementSibling;
@@ -251,14 +201,14 @@ async function crawl() {
         const btn = page.locator(navResult.selector).first();
         await btn.scrollIntoViewIfNeeded();
         await btn.click();
-        await page.waitForTimeout(8000); 
-        currentPage++;
+        await page.waitForTimeout(6000); 
+        currentPage++; 
       } else {
         console.log(`Finished: ${navResult.error}`);
         break;
       }
     } catch (e) {
-      console.log('Paging navigation error:', e.message);
+      console.log('Paging error:', e.message);
       break;
     }
   }
@@ -267,7 +217,4 @@ async function crawl() {
   console.log('Crawling finished.');
 }
 
-crawl().catch(err => {
-  console.error('Fatal error:', err);
-  process.exit(1);
-});
+crawl();
