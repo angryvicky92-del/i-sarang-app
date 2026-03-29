@@ -3,6 +3,8 @@ import { View, Text, StyleSheet, SafeAreaView, ScrollView, Image, TouchableOpaci
 import { ChevronLeft, User, Calendar, MessageSquare, Send } from 'lucide-react-native';
 import { supabase } from '../services/supabaseClient';
 import { useAuth } from '../contexts/AuthContext';
+import { getMyVotes } from '../services/engagementService';
+import EngagementButtons from '../components/EngagementButtons';
 
 export default function PostDetailScreen({ route, navigation }) {
   const { postId } = route.params;
@@ -12,6 +14,8 @@ export default function PostDetailScreen({ route, navigation }) {
   const [newComment, setNewComment] = useState('');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [userPostVote, setUserPostVote] = useState(0);
+  const [userCommentVotes, setUserCommentVotes] = useState({});
 
   useEffect(() => {
     fetchPost();
@@ -44,16 +48,34 @@ export default function PostDetailScreen({ route, navigation }) {
         .order('created_at', { ascending: true });
       if (error) throw error;
       setComments(data || []);
+      
+      // Fetch user's votes for these comments
+      if (profile && data && data.length > 0) {
+        const votes = await getMyVotes('comment', data.map(c => c.id), profile.id);
+        setUserCommentVotes(votes);
+      }
     } catch (error) {
       console.error('Error fetching comments:', error.message);
     }
   };
 
+  const fetchUserPostVote = async () => {
+    if (!profile) return;
+    const votes = await getMyVotes('post', [postId], profile.id);
+    setUserPostVote(votes[postId] || 0);
+  };
+
+  useEffect(() => {
+    if (!loading && post) {
+      fetchUserPostVote();
+    }
+  }, [loading, post, profile]);
+
   const handleAddComment = async () => {
     if (!profile) {
       Alert.alert('알림', '로그인이 필요합니다.', [
         { text: '취소', style: 'cancel' },
-        { text: '로그인', onPress: () => navigation.navigate('MyPage') }
+        { text: '로그인', onPress: () => navigation.navigate('Login') }
       ]);
       return;
     }
@@ -117,6 +139,20 @@ export default function PostDetailScreen({ route, navigation }) {
 
         <Text style={styles.bodyText}>{post.content}</Text>
         
+        <View style={styles.postEngagement}>
+          <EngagementButtons 
+            targetType="post" 
+            targetId={post.id} 
+            item={post} 
+            userVote={userPostVote} 
+            userId={profile?.id}
+            onUpdate={(updatedData) => {
+              setPost(prev => ({ ...prev, ...updatedData }));
+              setUserPostVote(updatedData.userVote);
+            }}
+          />
+        </View>
+        
         <View style={styles.commentSection}>
           <View style={styles.divider} />
           <View style={styles.sectionHeaderRow}>
@@ -131,6 +167,19 @@ export default function PostDetailScreen({ route, navigation }) {
                 <Text style={styles.commentDate}>{new Date(comment.created_at).toLocaleDateString()}</Text>
               </View>
               <Text style={styles.commentContent}>{comment.content}</Text>
+              <View style={styles.commentEngagement}>
+                <EngagementButtons 
+                  targetType="comment" 
+                  targetId={comment.id} 
+                  item={comment} 
+                  userVote={userCommentVotes[comment.id] || 0} 
+                  userId={profile?.id}
+                  onUpdate={(updatedData) => {
+                    setComments(prev => prev.map(c => c.id === comment.id ? { ...c, ...updatedData } : c));
+                    setUserCommentVotes(prev => ({ ...prev, [comment.id]: updatedData.userVote }));
+                  }}
+                />
+              </View>
             </View>
           ))}
 
@@ -189,6 +238,8 @@ const styles = StyleSheet.create({
   commentDate: { fontSize: 12, color: '#94A3B8' },
   commentContent: { fontSize: 14, color: '#475569', lineHeight: 20 },
   emptyComments: { textAlign: 'center', color: '#94A3B8', marginTop: 20, fontSize: 14 },
+  postEngagement: { marginTop: 32, marginBottom: 8, flexDirection: 'row', justifyContent: 'center' },
+  commentEngagement: { marginTop: 12, alignItems: 'flex-end' },
   inputContainer: { flexDirection: 'row', alignItems: 'flex-end', padding: 12, borderTopWidth: 1, borderTopColor: '#F1F5F9', backgroundColor: '#fff', gap: 10 },
   input: { flex: 1, backgroundColor: '#F1F5F9', borderRadius: 20, paddingHorizontal: 16, paddingVertical: 10, maxHeight: 100, fontSize: 15 },
   sendBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#75BA57', justifyContent: 'center', alignItems: 'center' }

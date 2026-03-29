@@ -2,64 +2,13 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, ScrollView, Image, Alert, ActivityIndicator, Platform } from 'react-native';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../services/supabaseClient';
-import { Camera, ShieldCheck, ChevronRight, BadgeCheck, LogOut } from 'lucide-react-native';
-import * as ImagePicker from 'expo-image-picker';
-import { decode } from 'base64-arraybuffer';
-import { requestVerification } from '../services/authService';
+import { ShieldCheck, ChevronRight, BadgeCheck, LogOut, Camera } from 'lucide-react-native';
 
 export default function MyPageScreen({ navigation }) {
   const { profile, session, isLoading } = useAuth();
-  const [uploading, setUploading] = useState(false);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-  };
-
-  const handlePickImage = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('권한 필요', '갤러리 접근 권한이 필요합니다.');
-      return;
-    }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      quality: 0.8,
-      base64: true,
-    });
-
-    if (!result.canceled) {
-      uploadVerification(result.assets[0]);
-    }
-  };
-
-  const uploadVerification = async (asset) => {
-    setUploading(true);
-    try {
-      const fileName = `${session.user.id}_${Date.now()}.jpg`;
-      const filePath = `verifications/${fileName}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from('community') // Reuse community bucket or use specialized one if exists
-        .upload(filePath, decode(asset.base64), {
-          contentType: 'image/jpeg',
-        });
-
-      if (uploadError) throw uploadError;
-
-      const { data: publicUrlData } = supabase.storage.from('community').getPublicUrl(filePath);
-      const imageUrl = publicUrlData.publicUrl;
-
-      const { error: reqError } = await requestVerification(session.user.id, imageUrl);
-      if (reqError) throw reqError;
-
-      Alert.alert('완료', '인증 신청이 접수되었습니다. 관리자 승인을 기다려주세요.');
-    } catch (error) {
-      Alert.alert('에러', error.message || '인증 신청에 실패했습니다.');
-    } finally {
-      setUploading(false);
-    }
   };
 
   if (isLoading) return <View style={styles.center}><ActivityIndicator color="#75BA57" /></View>;
@@ -95,7 +44,10 @@ export default function MyPageScreen({ navigation }) {
             {/* Teacher Verification Section */}
             {isTeacher && !isVerified && (
               <View style={styles.verificationCard}>
-                <Text style={styles.cardTitle}>선생님 자격 인증</Text>
+                <View style={styles.cardHeaderSmall}>
+                  <ShieldCheck size={20} color="#75BA57" />
+                  <Text style={styles.cardTitle}>선생님 자격 인증</Text>
+                </View>
                 {verificationStatus === 'pending' ? (
                   <View style={styles.pendingBadge}>
                     <Text style={styles.pendingText}>인증 심사 중입니다. 잠시만 기다려주세요! ⏳</Text>
@@ -104,24 +56,19 @@ export default function MyPageScreen({ navigation }) {
                   <>
                     <Text style={styles.cardDesc}>
                       자격증 사진을 업로드하시면 확인 후 {'\n'}
-                      <Text style={{fontWeight: 'bold'}}>'인증 선생님' 배지</Text>를 부여해 드립니다.
+                      <Text style={{fontWeight: '900', color: '#1E293B'}}>'인증 선생님' 배지</Text>를 부여해 드립니다.
                     </Text>
                     <TouchableOpacity 
                       style={styles.uploadBtn} 
-                      onPress={handlePickImage} 
-                      disabled={uploading}
+                      onPress={() => navigation.navigate('TeacherCertification')}
                     >
-                      {uploading ? (
-                        <ActivityIndicator color="#fff" />
-                      ) : (
-                        <>
-                          <Camera size={18} color="#fff" />
-                          <Text style={styles.uploadBtnText}>자격증 사진 올리기</Text>
-                        </>
-                      )}
+                      <Camera size={18} color="#fff" />
+                      <Text style={styles.uploadBtnText}>자격증 인증 신청하기</Text>
                     </TouchableOpacity>
                     {verificationStatus === 'rejected' && (
-                      <Text style={styles.rejectText}>❌ 인증이 거절되었습니다. 다시 시도해 주세요.</Text>
+                      <View style={styles.rejectBadge}>
+                        <Text style={styles.rejectText}>❌ 지난 인증이 거절되었습니다. 다시 신청해주세요.</Text>
+                      </View>
                     )}
                   </>
                 )}
@@ -189,14 +136,16 @@ const styles = StyleSheet.create({
   nicknameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   nickname: { fontSize: 20, fontWeight: '900', color: '#1E293B' },
   userTypeText: { fontSize: 13, color: '#64748B', marginTop: 2 },
-  verificationCard: { margin: 20, padding: 20, backgroundColor: '#fff', borderRadius: 24, borderWidth: 1, borderColor: '#E2E8F0' },
-  cardTitle: { fontSize: 16, fontWeight: 'bold', marginBottom: 8, color: '#1E293B' },
-  cardDesc: { fontSize: 14, color: '#64748B', lineHeight: 20, marginBottom: 16 },
-  uploadBtn: { backgroundColor: '#4A6CF7', height: 48, borderRadius: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  verificationCard: { margin: 20, padding: 24, backgroundColor: '#fff', borderRadius: 24, elevation: 4, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 10 },
+  cardHeaderSmall: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
+  cardTitle: { fontSize: 17, fontWeight: '900', color: '#1E293B' },
+  cardDesc: { fontSize: 14, color: '#64748B', lineHeight: 22, marginBottom: 20 },
+  uploadBtn: { backgroundColor: '#75BA57', height: 52, borderRadius: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
   uploadBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
-  pendingBadge: { padding: 16, backgroundColor: '#FEFCE8', borderRadius: 14, alignItems: 'center' },
+  pendingBadge: { padding: 16, backgroundColor: '#FEFCE8', borderRadius: 14, alignItems: 'center', borderWeight: 1, borderColor: '#FEF08A' },
   pendingText: { color: '#854D0E', fontSize: 13, fontWeight: 'bold' },
-  rejectText: { color: '#EF4444', fontSize: 12, textAlign: 'center', marginTop: 12 },
+  rejectBadge: { marginTop: 16, padding: 12, backgroundColor: '#FEF2F2', borderRadius: 10, borderWidth: 1, borderColor: '#FEE2E2' },
+  rejectText: { color: '#EF4444', fontSize: 12, textAlign: 'center' },
   menuSection: { marginTop: 8 },
   sectionLabel: { paddingHorizontal: 24, paddingVertical: 12, fontSize: 13, fontWeight: 'bold', color: '#94A3B8', textTransform: 'uppercase' },
   menuItem: { paddingHorizontal: 24, paddingVertical: 18, backgroundColor: '#fff', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#F8FAFC' },

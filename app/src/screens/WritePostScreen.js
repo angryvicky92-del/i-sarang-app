@@ -63,7 +63,7 @@ export default function WritePostScreen({ navigation }) {
 
       const { error } = await supabase.from('posts').insert([
         {
-          author_id: session.user.id,
+          user_id: session.user.id,
           author: profile.nickname || '익명',
           title: title.trim(),
           content: content.trim(),

@@ -11,28 +11,53 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 async function crawl() {
   const browser = await chromium.launch({ headless: true });
-  const context = await browser.newContext();
+  const context = await browser.newContext({
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+    extraHTTPHeaders: {
+      'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7'
+    }
+  });
   const page = await context.newPage();
   
   console.log('Navigating to portal list...');
-  await page.goto('https://central.childcare.go.kr/ccef/job/JobOfferSlPL.jsp', { waitUntil: 'networkidle' });
-
-  try {
-    const searchBtn = await page.locator('input[value="검색"], button:has-text("검색"), a:has-text("검색")').first();
-    await searchBtn.click();
-    await page.waitForSelector('table tbody tr', { timeout: 10000 });
-  } catch (e) {
-    console.log('Initial list load failed, trying Enter...');
-    await page.keyboard.press('Enter');
-    await page.waitForTimeout(3000);
+  let retryCount = 0;
+  while (retryCount < 5) {
+    try {
+      await page.goto('https://central.childcare.go.kr/ccef/job/JobOfferSlPL.jsp?flag=SlPL', { 
+        waitUntil: 'load', 
+        timeout: 60000 
+      });
+      break;
+    } catch (e) {
+      console.log(`Navigation retry ${retryCount + 1}...`);
+      retryCount++;
+      await new Promise(r => setTimeout(r, 3000));
+    }
   }
 
-  let allJobs = [];
-  const targetCount = 300;
-  let currentPage = 1;
+  try {
+    // URL with flag=SlPL usually loads list directly, but we wait for table to be sure
+    await page.waitForSelector('table tbody tr', { timeout: 10000 });
+  } catch (e) {
+    console.log('Table not found, trying Search button click fallback...');
+    try {
+      const searchBtn = await page.locator('input[value="검색"], button:has-text("검색"), a:has-text("검색")').first();
+      await searchBtn.click();
+      await page.waitForSelector('table tbody tr', { timeout: 10000 });
+    } catch (e2) {
+      console.log('Final fallback: Enter key...');
+      await page.keyboard.press('Enter');
+      await page.waitForTimeout(3000);
+    }
+  }
 
-  while (allJobs.length < targetCount && currentPage <= 30) {
-    console.log(`--- Crawling Page ${currentPage} (Current total: ${allJobs.length}) ---`);
+  const targetCount = 600;
+  let currentPage = 1;
+  let totalSaved = 0;
+
+  while (totalSaved < targetCount && currentPage <= 60) {
+    console.log(`--- Processing Page ${currentPage} ---`);
     
     const pageJobs = await page.$$eval('table tbody tr', (trList) => {
       return trList.map(tr => {
@@ -46,7 +71,7 @@ async function crawl() {
         const originalUrl = joseq ? `https://central.childcare.go.kr/ccef/job/JobOfferSl.jsp?flag=Sl&JOSEQ=${joseq}` : '';
         
         return {
-          external_id: tds[0].innerText.trim(),
+          external_id: joseq,
           center_type: tds[1].innerText.trim(),
           title: tds[2].innerText.trim(),
           center_name: tds[3].innerText.trim(),
@@ -57,42 +82,135 @@ async function crawl() {
           original_url: originalUrl,
           joseq: joseq
         };
-      }).filter(x => x !== null);
+      }).filter(x => x !== null && x.joseq !== '');
     });
 
-    allJobs = [...allJobs, ...pageJobs];
+    console.log(`Found ${pageJobs.length} jobs on page ${currentPage}. Scraping details...`);
 
-    if (allJobs.length >= targetCount) break;
+    for (const job of pageJobs) {
+      if (totalSaved >= targetCount) break;
+
+      const detailPage = await context.newPage();
+      try {
+        await detailPage.goto(job.original_url, { waitUntil: 'load', timeout: 30000 });
+        await detailPage.waitForTimeout(500); 
+        
+        const result = await detailPage.evaluate(() => {
+          const metadata = {};
+          let description = '';
+          const table = document.querySelector('.com_table table') || document.querySelector('#contents table');
+          if (table) {
+            const rows = table.querySelectorAll('tr');
+            rows.forEach(row => {
+              const thList = row.querySelectorAll('th');
+              const tdList = row.querySelectorAll('td');
+              if (thList.length > 0) {
+                for(let i=0; i<thList.length; i++) {
+                  const label = thList[i].innerText.trim();
+                  const value = tdList[i] ? tdList[i].innerText.trim() : '';
+                  if (label && label !== '제목' && label !== '등록자' && label !== '등록일') metadata[label] = value;
+                }
+              }
+            });
+          }
+          const viewCont = document.querySelector('.view_cont');
+          if (viewCont) description = viewCont.innerText.trim();
+          return { metadata, content: description };
+        });
+
+        await supabase.from('job_offers').upsert({
+          external_id: job.joseq,
+          center_type: job.center_type,
+          title: job.title,
+          center_name: job.center_name,
+          position: job.position,
+          location: job.location,
+          deadline: job.deadline,
+          posted_at: job.posted_at,
+          original_url: job.original_url,
+          content: result.content,
+          metadata: result.metadata,
+          created_at: new Date().toISOString()
+        }, { onConflict: 'external_id' });
+
+        totalSaved++;
+        console.log(`[${totalSaved}] Saved ${job.title} (${job.center_name})`);
+      } catch (e) {
+        console.error(`Error scraping ${job.joseq}:`, e.message);
+      } finally {
+        await detailPage.close();
+      }
+    }
+
+    if (totalSaved >= targetCount) break;
 
     // Go to next page
     currentPage++;
     try {
-      // Find the link that has href="#page_N"
+      console.log(`Searching for page ${currentPage} button...`);
+      await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+      await page.waitForTimeout(1500);
+
+      // Check if we are ALREADY on the target page (e.g. after 'Next' group click)
+      const activeNum = await page.evaluate(() => {
+        const strong = document.querySelector('.paging strong');
+        return strong ? strong.innerText.trim() : '';
+      });
+
+      if (activeNum === String(currentPage)) {
+        console.log(`Already on page ${currentPage} (active). No click needed.`);
+        continue;
+      }
+
       const pageSelector = `a[href="#page_${currentPage}"]`;
-      const nextBtn = await page.locator(pageSelector).first();
+      const pageBtn = page.locator(pageSelector).first();
       
-      if (await nextBtn.isVisible()) {
+      if (await pageBtn.count() > 0) {
         console.log(`Clicking page ${currentPage}...`);
-        await nextBtn.click();
+        await pageBtn.scrollIntoViewIfNeeded();
+        await pageBtn.click();
         await page.waitForTimeout(3000);
       } else {
-        // If specific page not found, maybe need to click Next Group arrow
-        const nextGroupBtn = await page.locator('a[href="#page_next"]').first();
-        if (await nextGroupBtn.isVisible()) {
-          console.log('Clicking Next Group arrow...');
+        console.log(`Page ${currentPage} button not found. Checking for 'Next' button...`);
+        const nextGroupBtn = page.locator('a.next[href="#page_next"]').first();
+        if (await nextGroupBtn.count() > 0) {
+          console.log(`Clicking Next Group button...`);
+          await nextGroupBtn.scrollIntoViewIfNeeded();
           await nextGroupBtn.click();
-          await page.waitForTimeout(3000);
-          // Now try the specific page again
-          const retryPageBtn = await page.locator(pageSelector).first();
-          if (await retryPageBtn.isVisible()) {
+          await page.waitForTimeout(6000); // Wait longer for new page numbers to load
+          
+          await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+          await page.waitForTimeout(1000);
+
+          // Re-check if group click landed us on target page
+          const newActiveNum = await page.evaluate(() => {
+            const paging = document.querySelector('.paging') || document.querySelector('#contents');
+            if (!paging) return '';
+            const strong = paging.querySelector('strong');
+            if (strong) return strong.innerText.trim();
+            const active = paging.querySelector('.active');
+            if (active) return active.innerText.trim();
+            return '';
+          });
+
+          console.log(`Detected active page after 'Next' click: ${newActiveNum}`);
+
+          if (newActiveNum === String(currentPage)) {
+            console.log(`Landed on page ${currentPage} after Next button. Perfect. Continuing.`);
+            continue;
+          }
+
+          const retryPageBtn = page.locator(pageSelector).first();
+          if (await retryPageBtn.count() > 0) {
+            console.log(`Found page ${currentPage} in next group, clicking...`);
             await retryPageBtn.click();
             await page.waitForTimeout(3000);
           } else {
-            console.log(`Page ${currentPage} still not found after group click.`);
+            console.log(`Page ${currentPage} (active=${newActiveNum}) still not found as link. Stopping.`);
             break;
           }
         } else {
-          console.log(`No more pages or next button found at page ${currentPage}.`);
+          console.log(`Reached end of results at page ${currentPage - 1}.`);
           break;
         }
       }
@@ -100,94 +218,6 @@ async function crawl() {
       console.log('Paging error:', e.message);
       break;
     }
-  }
-
-  console.log(`Found total ${allJobs.length} jobs. Starting deep greed-extraction...`);
-
-  for (const job of allJobs) {
-    // Check if already exists in DB with content to avoid duplicate deep scraping (optional performance)
-    // For now, let's just scrape all to ensure freshness as requested.
-    
-    console.log(`Scraping deep detail: ${job.title} (${job.center_name})`);
-    const detailPage = await context.newPage();
-    try {
-      await detailPage.goto(job.original_url, { waitUntil: 'load', timeout: 30000 });
-      await detailPage.waitForTimeout(1000); 
-      
-      const result = await detailPage.evaluate(() => {
-        const metadata = {};
-        let description = '';
-        
-        const table = document.querySelector('.com_table table') || 
-                      document.querySelector('#contents table');
-                      
-        if (table) {
-          const rows = table.querySelectorAll('tr');
-          rows.forEach(row => {
-            const thList = row.querySelectorAll('th');
-            const tdList = row.querySelectorAll('td');
-            
-            if (thList.length > 0) {
-              for(let i=0; i<thList.length; i++) {
-                const label = thList[i].innerText.trim();
-                const value = tdList[i] ? tdList[i].innerText.trim() : '';
-                if (label && label !== '제목' && label !== '등록자' && label !== '등록일') {
-                  metadata[label] = value;
-                }
-              }
-            } else if (tdList.length === 1) {
-              const text = tdList[0].innerText.trim();
-              if (text.length > 50) {
-                description += text + '\n\n';
-              }
-            }
-          });
-        }
-
-        const viewCont = document.querySelector('.view_cont');
-        if (viewCont) {
-          const vcText = viewCont.innerText.trim();
-          if (vcText.length > description.length) {
-            description = vcText;
-          }
-        }
-
-        return { metadata, content: description };
-      });
-
-      job.metadata = result.metadata;
-      job.content = result.content;
-      console.log(`- Fields: ${Object.keys(job.metadata).length}, Description len: ${job.content.length}`);
-
-    } catch (e) {
-      console.error(`Error scraping ${job.joseq}:`, e.message);
-      job.metadata = {};
-      job.content = '상세 정보를 불러올 수 없습니다.';
-    } finally {
-      await detailPage.close();
-    }
-
-    const { error } = await supabase
-      .from('job_offers')
-      .upsert({
-        external_id: job.external_id,
-        center_type: job.center_type,
-        title: job.title,
-        center_name: job.center_name,
-        position: job.position,
-        location: job.location,
-        deadline: job.deadline,
-        posted_at: job.posted_at,
-        original_url: job.original_url,
-        content: job.content,
-        metadata: job.metadata,
-        created_at: new Date().toISOString()
-      }, { onConflict: 'external_id' });
-
-    if (error) console.error('Upsert error:', error.message);
-    
-    // Add a small delay to be polite to the server
-    await new Promise(r => setTimeout(r, 500));
   }
 
   await browser.close();

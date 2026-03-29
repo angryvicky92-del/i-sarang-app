@@ -183,3 +183,30 @@ export const getRecentReviews = async (userType = '학부모') => {
   }
   return data
 }
+
+export const getReviewAverages = async (centerId) => {
+  try {
+    const { data, error } = await supabase
+      .from('reviews')
+      .select('rating, profiles(user_type)')
+      .eq('center_id', centerId)
+
+    if (error || !data) return { parentAvg: '0.0', teacherAvg: '0.0' }
+
+    const parentReviews = data.filter(r => r.profiles?.user_type !== '선생님')
+    const teacherReviews = data.filter(r => r.profiles?.user_type === '선생님')
+
+    const calc = (list) => {
+      if (list.length === 0) return '0.0'
+      const sum = list.reduce((acc, curr) => acc + curr.rating, 0)
+      return (sum / list.length).toFixed(1)
+    }
+
+    return {
+      parentAvg: calc(parentReviews),
+      teacherAvg: calc(teacherReviews)
+    }
+  } catch (e) {
+    return { parentAvg: '0.0', teacherAvg: '0.0' }
+  }
+}

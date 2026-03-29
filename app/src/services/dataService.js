@@ -3,7 +3,7 @@ import { SIGUNGU_LIST } from './sigungu';
 const { DOMParser } = require('xmldom');
 
 const API_KEY = process.env.EXPO_PUBLIC_CHILDCARE_API_KEY;
-const API_URL_030 = 'http://api.childcare.go.kr/mediate/rest/cpmsapi030/cpmsapi030/request';
+const API_URL_030 = 'https://api.childcare.go.kr/mediate/rest/cpmsapi030/cpmsapi030/request';
 const KAKAO_REST_KEY = process.env.EXPO_PUBLIC_KAKAO_REST_API_KEY;
 
 export const getKakaoRegionCode = async (lat, lng) => {
@@ -42,7 +42,7 @@ export const TYPE_COLORS = {
 };
 
 const daycareCache = new Map();
-const CACHE_TTL = 1000 * 60 * 10; // 10 minutes
+const CACHE_TTL = 1000 * 60 * 60 * 24 * 7; // 7 days
 
 export const getDaycares = async (arcode = '') => {
   if (!arcode) return [];
@@ -156,6 +156,20 @@ export const getDaycares = async (arcode = '') => {
   } catch (e) { console.error('Fetch error 030', e); return []; }
 };
 
+/**
+ * Synchronously retrieves cached daycares if available and not expired.
+ * Useful for instant UI transitions.
+ */
+export const getCachedDaycares = (arcode) => {
+  if (!arcode || !daycareCache.has(arcode)) return null;
+  const cached = daycareCache.get(arcode);
+  if (Date.now() - cached.timestamp < CACHE_TTL) {
+    console.log(`[Cache] Hit for arcode: ${arcode}`);
+    return cached.data;
+  }
+  return null;
+};
+
 export const getMultiRegionDaycares = async (points) => {
   const arcodes = new Set();
   
@@ -206,32 +220,137 @@ export const getDaycareById = async (id, arcode = '') => {
   return list.find(d => d.id === id) || null;
 };
 
-export const getDaycareByName = async (crname, districtName) => {
+export const getDaycareByInfo = async (crname, districtName, fullAddress = '') => {
   try {
-    // 1. Find arcode for the districtName
+    const normalize = (n) => n ? n.replace(/\s/g, '').replace(/\(.*\)/g, '') : '';
+    const searchName = normalize(crname);
+    const nSearchAddr = normalize(fullAddress);
+
+    // 1. Find the correct targetArcode with strict Sido validation
     let targetArcode = '';
+    let foundMatches = []; // Store potentially matching sigungus
+
     for (const sido in SIGUNGU_LIST) {
       const found = SIGUNGU_LIST[sido].find(s => s.name === districtName);
       if (found) {
-        targetArcode = found.code;
-        break;
+        foundMatches.push({ code: found.code, sidoCode: sido });
+      }
+    }
+
+    if (foundMatches.length === 0) {
+      // If districtName is empty (e.g. Sejong), handle special cases or just return null
+      if (nSearchAddr.includes('세종')) targetArcode = '36110';
+      else return null;
+    } else if (foundMatches.length === 1) {
+      targetArcode = foundMatches[0].code;
+    } else {
+      // MULTIPLE matches (e.g. "서구", "중구", "남구")
+      if (nSearchAddr) {
+        const bestSidoMatch = foundMatches.find(m => {
+          const sidoObj = SIDO_LIST.find(s => s.code === m.sidoCode);
+          return sidoObj && (nSearchAddr.includes(normalize(sidoObj.name)) || nSearchAddr.includes(sidoObj.name.substring(0, 2)));
+        });
+        if (bestSidoMatch) {
+          targetArcode = bestSidoMatch.code;
+        } else {
+          // Address doesn't match any of the Sidos that have this districtName
+          return null; 
+        }
+      } else {
+        // No address to disambiguate? Default to first one (rare case for jobs)
+        targetArcode = foundMatches[0].code;
       }
     }
     
     if (!targetArcode) return null;
     
-    // 2. Fetch all daycares in that district
+    // 2. Fetch daycares in the confirmed correct district
     const list = await getDaycares(targetArcode);
     
-    // 3. Match by name (normalized)
-    const normalize = (n) => n.replace(/\s/g, '').replace(/\(.*\)/g, '');
-    const searchName = normalize(crname);
-    
-    return list.find(d => normalize(d.name).includes(searchName) || searchName.includes(normalize(d.name))) || null;
+    // 3. Match by name & address
+    // Primary Match: Both name and address overlap
+    const addressMatch = list.find(d => {
+        const nItemName = normalize(d.name);
+        if (!(nItemName.includes(searchName) || searchName.includes(nItemName))) return false;
+        
+        if (!nSearchAddr) return true; // Name match within correct district is enough if no searchAddr
+        
+        const nItemAddr = normalize(d.addr);
+        // Precise address or significant overlap (dong name, road name)
+        const addrCore = nSearchAddr.replace(/[0-9-]/g, '').slice(-6); // Last part is usually more specific
+        return nItemAddr.includes(nSearchAddr) || nSearchAddr.includes(nItemAddr) || 
+               nItemAddr.includes(addrCore) || addrCore.includes(nItemAddr.replace(/[0-9-]/g, '').slice(-4));
+    });
+
+    if (addressMatch) return addressMatch;
+
+    // Strict Fallback: IF an address was provided, we MUST NOT match to a random same-name center 
+    // that doesn't share any address similarity, even in the same district.
+    if (nSearchAddr) {
+        // Check for very strict name match BUT only if address isn't totally different
+        const nameStrict = list.find(d => normalize(d.name) === searchName);
+        if (nameStrict) {
+            // Check if at least the Sido/Sigungu parts of the address match
+            const nItemAddr = normalize(nameStrict.addr);
+            if (nItemAddr.includes(districtName) || nSearchAddr.includes(nItemAddr.substring(0, 5))) {
+                return nameStrict;
+            }
+        }
+        return null; // Better to show nothing than wrong info
+    }
+
+    // No address provided? Just name match in the district.
+    return list.find(d => normalize(d.name) === searchName) || null;
   } catch (e) {
-    console.warn('getDaycareByName fail', e);
+    console.warn('getDaycareByInfo fail', e);
     return null;
   }
+};
+
+export const isJobMatchingDaycare = (job, daycare) => {
+  if (!job || !daycare) return false;
+  const normalize = (n) => n ? n.replace(/\s/g, '').replace(/\(.*\)/g, '') : '';
+  const searchName = normalize(job.center_name);
+  const dcName = normalize(daycare.name);
+  
+  // 1. Name match - must be almost exact for the core name
+  // To avoid matching "I-Park" to "Samsung I-Park" and "Hyundai I-Park" simultaneously
+  if (searchName !== dcName && !searchName.includes(dcName) && !dcName.includes(searchName)) return false;
+  
+  // 2. Location validation - go beyond Sigungu if possible
+  const dcSido = daycare.addr ? daycare.addr.substring(0, 2) : (daycare.office ? daycare.office.substring(0, 2) : '');
+  const jobLoc = job.location || '';
+  const jobAddr = job.metadata ? (job.metadata['소재지'] || job.metadata['근무지 주소'] || '') : '';
+  const nJobAddr = normalize(`${jobLoc} ${jobAddr}`);
+  const nDcAddr = normalize(daycare.addr || '');
+  
+  // Sido check (인천, 서울, 광주 등)
+  if (dcSido && !nJobAddr.includes(dcSido)) return false;
+  
+  // Sigungu check (서구, 중구 등)
+  const dcDistrict = daycare.office ? daycare.office.split(' ')[1] : '';
+  if (dcDistrict && !nJobAddr.includes(dcDistrict.replace('청', ''))) return false;
+
+  // 3. Dong / Road level check - Crucial for 1:1 matching
+  // a) Extract from meta address
+  if (jobAddr && daycare.addr) {
+    const jobDong = jobAddr.match(/(\w+동|\w+로 \d+)/); 
+    if (jobDong) {
+      const matchKey = normalize(jobDong[0]);
+      if (!nDcAddr.includes(matchKey)) return false;
+    }
+  }
+
+  // b) Extract more specific location from TITLE (often in brackets like [마전동])
+  if (job.title && daycare.addr) {
+    const titleDong = job.title.match(/\[(\w+동)\]/);
+    if (titleDong) {
+      const matchKey = normalize(titleDong[1]);
+      if (!nDcAddr.includes(matchKey)) return false;
+    }
+  }
+  
+  return true;
 };
 
 export const getDaycareStatus = getDaycaresDetailed;

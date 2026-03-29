@@ -18,6 +18,7 @@ import WritePostScreen from './src/screens/WritePostScreen';
 import AdminApprovalScreen from './src/screens/AdminApprovalScreen';
 import PostDetailScreen from './src/screens/PostDetailScreen';
 import JobDetailScreen from './src/screens/JobDetailScreen';
+import TeacherCertificationScreen from './src/screens/TeacherCertificationScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -59,12 +60,12 @@ export default function App() {
     <AuthProvider>
       <SearchProvider>
         <NavigationContainer>
-          <Stack.Navigator screenOptions={{ headerShown: false }}>
+          <Stack.Navigator screenOptions={{ headerShown: false, headerBackTitleVisible: false }}>
             <Stack.Screen name="MainTabs" component={TabNavigator} />
             <Stack.Screen 
               name="Detail" 
               component={CenterDetailScreen} 
-              options={{ headerShown: true, title: '어린이집 상세', headerBackTitleVisible: false }} 
+              options={{ headerShown: true, title: '어린이집 상세' }} 
             />
             <Stack.Screen 
               name="Login" 
@@ -88,6 +89,11 @@ export default function App() {
             <Stack.Screen 
               name="JobDetail" 
               component={JobDetailScreen} 
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen 
+              name="TeacherCertification" 
+              component={TeacherCertificationScreen} 
               options={{ headerShown: false }}
             />
           </Stack.Navigator>
