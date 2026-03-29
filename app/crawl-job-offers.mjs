@@ -62,7 +62,7 @@ async function crawl() {
 
   // Initial table check
   try {
-    await page.waitForSelector('table', { timeout: 20000 });
+    await page.waitForSelector('.list01', { timeout: 20000 });
   } catch (e) {
     console.log(`[!] Table not found. Title: ${await page.title()}`);
     console.log('Trying Search fallback...');
@@ -80,16 +80,16 @@ async function crawl() {
     
     // Ensure table is present
     try {
-      await page.waitForSelector('table tbody tr', { timeout: 20000 });
+      await page.waitForSelector('.list01 tbody tr', { timeout: 20000 });
     } catch (e) {
       console.log('Main list table missing. Refreshing...');
       await page.goto('https://central.childcare.go.kr/ccef/job/JobOfferSlPL.jsp?flag=SlPL', { waitUntil: 'load' });
       await page.waitForTimeout(5000);
-      await page.waitForSelector('table tbody tr', { timeout: 20000 });
+      await page.waitForSelector('.list01 tbody tr', { timeout: 20000 });
     }
 
     const pageJobs = await page.evaluate(() => {
-      const rows = Array.from(document.querySelectorAll('table tbody tr'));
+      const rows = Array.from(document.querySelectorAll('.list01 tbody tr'));
       return rows.map(row => {
         const tds = Array.from(row.querySelectorAll('td'));
         if (tds.length < 8) return null;
