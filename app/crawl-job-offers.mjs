@@ -52,7 +52,7 @@ async function crawl() {
     }
   }
 
-  const targetCount = 3;
+  const targetCount = 600;
   let currentPage = 1;
   let totalSaved = 0;
 
