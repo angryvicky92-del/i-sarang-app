@@ -1,6 +1,7 @@
 import 'react-native-url-polyfill/auto';
 import React from 'react';
 import { TouchableOpacity, View, Image, Text, Platform } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { NavigationContainer, DefaultTheme, DarkTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -341,16 +342,18 @@ function ThemedNavigation() {
 
 export default function App() {
   return (
-    <ThemeProvider>
-      <SettingsProvider>
-        <AuthProvider>
-          <ChatProvider>
-            <SearchProvider>
-              <ThemedNavigation />
-            </SearchProvider>
-          </ChatProvider>
-        </AuthProvider>
-      </SettingsProvider>
-    </ThemeProvider>
+    <SafeAreaProvider>
+      <ThemeProvider>
+        <SettingsProvider>
+          <AuthProvider>
+            <ChatProvider>
+              <SearchProvider>
+                <ThemedNavigation />
+              </SearchProvider>
+            </ChatProvider>
+          </AuthProvider>
+        </SettingsProvider>
+      </ThemeProvider>
+    </SafeAreaProvider>
   );
 }
