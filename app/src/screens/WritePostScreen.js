@@ -102,7 +102,6 @@ export default function WritePostScreen({ route, navigation }) {
           title: title.trim(),
           content: content.trim(),
           type: targetBoardType,
-          type: targetBoardType,
           image_url: imageUrls[0] || null, // First image for legacy/list view
           image_urls: imageUrls
         }

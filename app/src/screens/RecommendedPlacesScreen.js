@@ -15,10 +15,6 @@ export default function RecommendedPlacesScreen({ navigation }) {
   const [loading, setLoading] = useState(true);
   const [userLocation, setUserLocation] = useState(null);
 
-  useEffect(() => {
-    fetchPlaces();
-  }, []);
-
   const fetchPlaces = async () => {
     setLoading(true);
     let lat = region?.center?.lat || 37.5145;
@@ -32,14 +28,17 @@ export default function RecommendedPlacesScreen({ navigation }) {
         lng = location.coords.longitude;
         setUserLocation({ lat, lng });
       }
+      const results = await getRecommendedPlaces(lat, lng, 10000, region?.sido, region?.sigungu); // 10km radius
+      setPlaces(results);
     } catch (e) {
-      console.warn('Location fetch fail', e);
+      console.error(e);
     }
-
-    const results = await getRecommendedPlaces(lat, lng, 10000, region?.sido, region?.sigungu); // 10km radius
-    setPlaces(results);
     setLoading(false);
   };
+
+  useEffect(() => {
+    fetchPlaces();
+  }, [region]);
 
   const filteredPlaces = places.filter(p => p.isKidsFriendly);
 
