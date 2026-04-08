@@ -202,7 +202,7 @@ export default function CommunityScreen({ navigation, route }) {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       
       {visibleTabs.length > 1 && (
         <View style={[styles.tabContainer, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -310,7 +310,7 @@ export default function CommunityScreen({ navigation, route }) {
         nickname={selectedUser?.nickname}
         userType={selectedUser?.userType}
       />
-    </SafeAreaView>
+    </View>
   );
 }
 

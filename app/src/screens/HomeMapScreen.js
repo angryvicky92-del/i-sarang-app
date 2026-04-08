@@ -266,7 +266,7 @@ export default function HomeMapScreen({ navigation, route }) {
   }, [selectedDaycare, clusterDaycares, isFetching, updateRegion]);
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={styles.floatingHeaderContainer}>
         <View style={[styles.segmentContainer, { backgroundColor: isDarkMode ? '#1E293B' : '#F1F5F9', borderColor: colors.border }]}>
           <TouchableOpacity style={[styles.segmentBtn, mapMode === 'DAYCARE' && [styles.segmentBtnActive, { backgroundColor: colors.card }]]} onPress={() => setMapMode('DAYCARE')}>
@@ -583,7 +583,7 @@ export default function HomeMapScreen({ navigation, route }) {
         }}
         onClose={() => setClusterDaycares(null)}
       />
-    </SafeAreaView>
+    </View>
   );
 }
 

@@ -91,7 +91,7 @@ export default function CenterListScreen({ navigation, route }) {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: isDarkMode ? colors.background : '#F8F9FA' }]}>
+    <View style={[styles.container, { backgroundColor: isDarkMode ? colors.background : '#F8F9FA' }]}>
       <View style={[styles.searchContainer, { backgroundColor: colors.card }]}>
         <View style={[styles.searchWrapper, { backgroundColor: isDarkMode ? colors.background : '#fff', borderColor: colors.primary }]}>
           <TextInput
@@ -180,7 +180,7 @@ export default function CenterListScreen({ navigation, route }) {
 
       <LocationBottomSheet isVisible={isLocationOpen} onClose={() => setIsLocationOpen(false)} />
       <FilterModal visible={isFilterOpen} onClose={() => setIsFilterOpen(false)} />
-    </SafeAreaView>
+    </View>
   );
 }
 
