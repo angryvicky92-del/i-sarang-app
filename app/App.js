@@ -1,8 +1,16 @@
 import 'react-native-url-polyfill/auto';
 import React from 'react';
-import { TouchableOpacity, View, Image, Text, Platform } from 'react-native';
+import { TouchableOpacity, View, Image, Text, Platform, NativeModules } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { NavigationContainer, DefaultTheme, DarkTheme } from '@react-navigation/native';
+
+const hasNativeAdMob = !!NativeModules.RNGoogleMobileAdsModule;
+if (hasNativeAdMob) {
+  try {
+    const mobileAds = require('react-native-google-mobile-ads').default;
+    mobileAds().initialize();
+  } catch (e) {}
+}
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createDrawerNavigator } from '@react-navigation/drawer';
