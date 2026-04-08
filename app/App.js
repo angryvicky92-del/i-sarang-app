@@ -112,13 +112,13 @@ function TabNavigator({ navigation }) {
             <View style={{ justifyContent: 'center', alignItems: 'center' }}>
               <Image 
                 source={require('./assets/custom_icon.png')} 
-                style={{ width: 60, height: 60, resizeMode: 'contain' }} 
+                style={{ width: 44, height: 44, resizeMode: 'contain', marginTop: Platform.OS === 'ios' ? 10 : 0 }} 
               />
             </View>
           ) : getHeaderTitle(route.name),
           headerTitleAlign: 'center',
           headerTitleStyle: { fontSize: 20, fontWeight: '800' },
-          headerStyle: { backgroundColor: colors.card, shadowColor: 'transparent', elevation: 0 },
+          headerStyle: { backgroundColor: colors.card, shadowColor: 'transparent', elevation: 0, height: Platform.OS === 'ios' ? 105 : 70 },
           headerLeft: () => (
             <TouchableOpacity onPress={() => navigation.openDrawer()} style={{ marginLeft: 16 }}>
               <Menu size={28} color={colors.text} />
