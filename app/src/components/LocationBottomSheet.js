@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, Animated, Dimensions } from 'react-native';
 import { useSearch } from '../contexts/SearchContext';
-import { SIDO_LIST, SIGUNGU_LIST } from '../services/dataService';
+import { SIDO_LIST, SIGUNGU_LIST, getKakaoAddressCenter } from '../services/dataService';
 import { X } from 'lucide-react-native';
 
 const { height } = Dimensions.get('window');
@@ -29,10 +29,12 @@ export default function LocationBottomSheet({ isVisible, onClose }) {
 
   const handleSidoSelect = (sidoName) => setSelectedSido(sidoName);
 
-  const handleSigunguSelect = (sigunguName, arcode) => {
+  const handleSigunguSelect = async (sigunguName, arcode) => {
     // Pass true for the animateTick parameter so the map flies to the new district
     const selectedSidoObj = SIDO_LIST.find(s => s.name === selectedSido) || SIDO_LIST[0];
-    updateRegion(selectedSidoObj.name, sigunguName, arcode, null, true);
+    const addr = `${selectedSidoObj.name} ${sigunguName}`;
+    const coords = await getKakaoAddressCenter(addr);
+    updateRegion(selectedSidoObj.name, sigunguName, arcode, coords, true);
     handleClose();
   };
 

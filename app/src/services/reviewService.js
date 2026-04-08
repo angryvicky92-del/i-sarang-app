@@ -1,10 +1,12 @@
 import { supabase } from './supabaseClient'
-
 export const getReviews = async (centerId, userId = null, sortBy = 'newest') => {
+  const cid = String(centerId || '').trim();
+  if (!cid) return [];
+
   let query = supabase
     .from('reviews')
     .select('*, profiles(is_verified, user_type)')
-    .eq('center_id', centerId)
+    .eq('center_id', cid)
 
   if (sortBy === 'newest') query = query.order('created_at', { ascending: false })
   else if (sortBy === 'likes') query = query.order('likes', { ascending: false })
@@ -17,7 +19,7 @@ export const getReviews = async (centerId, userId = null, sortBy = 'newest') => 
     let fallbackQuery = supabase
       .from('reviews')
       .select('*')
-      .eq('center_id', centerId)
+      .eq('center_id', cid)
     
     if (sortBy === 'newest') fallbackQuery = fallbackQuery.order('created_at', { ascending: false })
     else if (sortBy === 'likes') fallbackQuery = fallbackQuery.order('likes', { ascending: false })
@@ -26,6 +28,20 @@ export const getReviews = async (centerId, userId = null, sortBy = 'newest') => 
     if (fallbackError) {
       console.error('[ReviewService] Fallback fetch also failed:', fallbackError);
       return [];
+    }
+
+    // Attempt to manually fetch profiles if the join failed
+    if (fallbackData && fallbackData.length > 0) {
+      const userIds = [...new Set(fallbackData.map(r => r.user_id))];
+      const { data: profileList } = await supabase
+        .from('profiles')
+        .select('id, is_verified, user_type, nickname')
+        .in('id', userIds);
+      
+      const profileMap = {};
+      profileList?.forEach(p => { profileMap[p.id] = p; });
+      
+      fallbackData.forEach(r => { r.profiles = profileMap[r.user_id]; });
     }
 
     if (userId && fallbackData && fallbackData.length > 0) {
@@ -63,7 +79,8 @@ export const createReview = async (review) => {
   const { data, error } = await supabase
     .from('reviews')
     .insert([review])
-    .select('*')
+    .select()
+    .single()
 
   if (error) {
     console.error('Error creating review:', error)
@@ -71,17 +88,17 @@ export const createReview = async (review) => {
   }
 
   // Fetch profiles separately if the join is problematic during insert
-  const novelReview = data[0]
+  const novelReview = data
   if (novelReview) {
     const { data: profile } = await supabase
       .from('profiles')
-      .select('is_verified, user_type')
+      .select('id, is_verified, user_type, nickname')
       .eq('id', novelReview.user_id)
       .single()
     return { ...novelReview, profiles: profile }
   }
   
-  return data[0]
+  return data
 }
 
 export const toggleReviewLike = async (reviewId, userId, isLiked) => {
@@ -185,28 +202,113 @@ export const getRecentReviews = async (userType = '학부모') => {
 }
 
 export const getReviewAverages = async (centerId) => {
-  try {
-    const { data, error } = await supabase
+  const cid = String(centerId || '').trim();
+  if (!cid) return { parentAvg: '0.0', teacherAvg: '0.0' };
+
+  // 1. Fetch by center_id
+  const { data, error } = await supabase
+    .from('reviews')
+    .select('rating, profiles(user_type)')
+    .eq('center_id', cid)
+  
+  if (error) {
+    console.warn(`[ReviewService] getReviewAverages join fetch failed: ${error.message}`);
+    // Fallback: simple fetch
+    const { data: fallbackData, error: fallbackError } = await supabase
       .from('reviews')
-      .select('rating, profiles(user_type)')
-      .eq('center_id', centerId)
+      .select('rating')
+      .eq('center_id', cid);
+      
+    if (fallbackError || !fallbackData || fallbackData.length === 0) {
+      return { parentAvg: '-', teacherAvg: '-' };
+    }
+    
+    // Manual profile fetch
+    const userIds = [...new Set(fallbackData.map(r => r.user_id))];
+    const { data: profileList } = await supabase
+      .from('profiles')
+      .select('id, user_type')
+      .in('id', userIds);
+      
+    const profileMap = {};
+    profileList?.forEach(p => { profileMap[p.id] = p; });
+    
+    fallbackData.forEach(r => { r.profiles = profileMap[r.user_id] || { user_type: '학부모' }; });
+    
+    return await processReviewData(fallbackData);
+  }
+  
+  return await processReviewData(data || []);
+};
 
-    if (error || !data) return { parentAvg: '0.0', teacherAvg: '0.0' }
+const processReviewData = async (data) => {
+  try {
+    // If join failed, manually fetch profiles (same as before but safer)
+    const needsProfiles = data.some(r => !r.profiles);
+    if (needsProfiles) {
+      const userIds = [...new Set(data.map(r => r.user_id))];
+      const { data: profileList } = await supabase
+        .from('profiles')
+        .select('id, user_type')
+        .in('id', userIds);
+      
+      const profileMap = {};
+      if (profileList) {
+        profileList.forEach(p => profileMap[p.id] = p.user_type);
+      }
+      data.forEach(r => {
+        if (!r.profiles) r.profiles = { user_type: profileMap[r.user_id] || '학부모' };
+      });
+    }
 
-    const parentReviews = data.filter(r => r.profiles?.user_type !== '선생님')
-    const teacherReviews = data.filter(r => r.profiles?.user_type === '선생님')
+    const parentReviews = data.filter(r => (r.profiles?.user_type || '학부모') !== '선생님');
+    const teacherReviews = data.filter(r => r.profiles?.user_type === '선생님');
 
     const calc = (list) => {
-      if (list.length === 0) return '0.0'
-      const sum = list.reduce((acc, curr) => acc + curr.rating, 0)
-      return (sum / list.length).toFixed(1)
-    }
+      if (list.length === 0) return '0.0';
+      // Force Number conversion to prevent string concatenation bugs
+      const sum = list.reduce((acc, curr) => acc + Number(curr.rating || 0), 0);
+      return (sum / list.length).toFixed(1);
+    };
 
     return {
       parentAvg: calc(parentReviews),
       teacherAvg: calc(teacherReviews)
-    }
+    };
   } catch (e) {
-    return { parentAvg: '0.0', teacherAvg: '0.0' }
+    console.warn('processReviewData failed', e);
+    return { parentAvg: '0.0', teacherAvg: '0.0' };
   }
-}
+};
+
+export const getBulkReviewAverages = async (centerIds) => {
+  if (!centerIds || centerIds.length === 0) return {};
+  
+  const { data, error } = await supabase
+    .from('reviews')
+    .select('center_id, rating, user_id')
+    .in('center_id', centerIds.map(id => String(id)));
+    
+  if (error) {
+    console.warn('[ReviewService] getBulkReviewAverages failed:', error);
+    return {};
+  }
+
+  if (!data || data.length === 0) return {};
+
+  // Group by center_id
+  const groups = {};
+  data.forEach(r => {
+    if (!groups[r.center_id]) groups[r.center_id] = [];
+    groups[r.center_id].push(r);
+  });
+  
+  const results = {};
+  // Process each group to get parent/teacher averages
+  const cids = Object.keys(groups);
+  for (const cid of cids) {
+    // Note: processReviewData will handle manual profile fetch if needed
+    results[cid] = await processReviewData(groups[cid]);
+  }
+  return results;
+};

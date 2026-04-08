@@ -6,7 +6,14 @@ const API_KEY = process.env.EXPO_PUBLIC_CHILDCARE_API_KEY;
 const API_URL_030 = 'https://api.childcare.go.kr/mediate/rest/cpmsapi030/cpmsapi030/request';
 const KAKAO_REST_KEY = process.env.EXPO_PUBLIC_KAKAO_REST_API_KEY;
 
+const kakaoGeoCache = new Map();
+
 export const getKakaoRegionCode = async (lat, lng) => {
+  const cacheKey = `${lat.toFixed(2)}_${lng.toFixed(2)}`;
+  if (kakaoGeoCache.has(cacheKey)) {
+    return kakaoGeoCache.get(cacheKey);
+  }
+
   try {
     const res = await fetch(`https://dapi.kakao.com/v2/local/geo/coord2regioncode.json?x=${lng}&y=${lat}`, {
       headers: { Authorization: `KakaoAK ${KAKAO_REST_KEY}` }
@@ -14,9 +21,27 @@ export const getKakaoRegionCode = async (lat, lng) => {
     const data = await res.json();
     if (data && data.documents && data.documents.length > 0) {
       const doc = data.documents.find(d => d.region_type === 'H') || data.documents[0];
-      return { sido: doc.region_1depth_name, sigungu: doc.region_2depth_name };
+      const result = { sido: doc.region_1depth_name, sigungu: doc.region_2depth_name };
+      kakaoGeoCache.set(cacheKey, result);
+      return result;
     }
   } catch (e) { console.warn('Kakao geocoding fail', e); }
+  return null;
+};
+
+export const getKakaoAddressCenter = async (address) => {
+  try {
+    const res = await fetch(`https://dapi.kakao.com/v2/local/search/address.json?query=${encodeURIComponent(address)}`, {
+      headers: { Authorization: `KakaoAK ${KAKAO_REST_KEY}` }
+    });
+    const data = await res.json();
+    if (data && data.documents && data.documents.length > 0) {
+      return { 
+        lat: parseFloat(data.documents[0].y), 
+        lng: parseFloat(data.documents[0].x) 
+      };
+    }
+  } catch (e) { console.warn('Kakao address search fail', e); }
   return null;
 };
 
@@ -41,6 +66,15 @@ export const TYPE_COLORS = {
   [TYPE_GOK]: '#FACC15', [TYPE_GAJUNG]: '#F97316', [TYPE_MIN]: '#22C55E', [TYPE_JIK]: '#3B82F6', [TYPE_ETC]: '#94A3B8'
 };
 
+export const PLACE_TYPE_COLORS = {
+  '키즈카페': '#F43F5E', // Rose/Pink
+  '공원/자연': '#10B981', // Emerald/Green
+  '문화/전시': '#8B5CF6', // Violet/Purple
+  '놀이/레저': '#F59E0B', // Amber
+  '관광/체험': '#3B82F6', // Blue
+  '장소': '#6366F1'       // Indigo
+};
+
 const daycareCache = new Map();
 const CACHE_TTL = 1000 * 60 * 60 * 24 * 7; // 7 days
 
@@ -60,21 +94,32 @@ export const getDaycares = async (arcode = '') => {
     const res = await fetch(`${API_URL_030}?${params.toString()}`);
     const xml = await res.text();
     
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(xml, "text/xml");
-    const items = doc.getElementsByTagName("item");
+    // Use fast-xml-parser with manual parsing to preserve leading zeros in stcode
+    const { XMLParser } = require('fast-xml-parser');
+    const parser = new XMLParser({ 
+        ignoreAttributes: true,
+        parseTagValue: false // CRITICAL: Stop auto-conversion to numbers (prevents leading zero loss)
+    });
+    const jsonObj = parser.parse(xml);
 
-    const itemsArray = [];
-    for (let i = 0; i < items.length; i++) {
-        itemsArray.push(items[i]);
+    let itemsArray = [];
+    if (jsonObj?.response?.item) {
+        itemsArray = Array.isArray(jsonObj.response.item) ? jsonObj.response.item : [jsonObj.response.item];
+    } else if (jsonObj?.response?.body?.item) {
+        itemsArray = Array.isArray(jsonObj.response.body.item) ? jsonObj.response.body.item : [jsonObj.response.body.item];
+    } else if (jsonObj?.response?.body?.items?.item) {
+        itemsArray = Array.isArray(jsonObj.response.body.items.item) ? jsonObj.response.body.items.item : [jsonObj.response.body.items.item];
     }
 
     const data = itemsArray.map(item => {
-      // API tags can be uppercase or lowercase depending on exactly how XML parser handles them
+      // Handle fast-xml-parser output (it converts uppercase/lowercase tags directly to keys)
       const g = (t) => {
-        const node = item.getElementsByTagName(t)[0] || item.getElementsByTagName(t.toUpperCase())[0] || item.getElementsByTagName(t.toLowerCase())[0];
-        return node ? node.textContent.trim() : '';
+        let val = item[t];
+        if (val === undefined) val = item[t.toUpperCase()];
+        if (val === undefined) val = item[t.toLowerCase()];
+        return val ? String(val).trim() : '';
       };
+      
       const n = (t) => parseInt(g(t)) || 0;
       const nf = (t) => parseFloat(g(t)) || 0;
       
@@ -85,15 +130,28 @@ export const getDaycares = async (arcode = '') => {
       else if (typeText.includes(TYPE_MIN)) type = TYPE_MIN;
       else if (typeText.includes(TYPE_JIK)) type = TYPE_JIK;
       
-      const stcode = g("stcode");
+      const stcode = g("stcode") || `id_${Math.random()}`;
       
+      // Deterministic micro-offset to prevent perfect overlapping of apartment daycares
+      let latOffset = 0;
+      let lngOffset = 0;
+      if (typeof stcode === 'string' && stcode.length > 2) {
+        const hashLat = (parseInt(stcode.slice(-2), 10) || 0) / 100;
+        const hashLng = (parseInt(stcode.slice(-4, -2), 10) || 0) / 100;
+        latOffset = (hashLat - 0.5) * 0.0002; // Roughly +- 11 meters
+        lngOffset = (hashLng - 0.5) * 0.0002;
+      }
+      
+      const baseLat = parseFloat(g("la")) || 37.5;
+      const baseLng = parseFloat(g("lo")) || 127.0;
+
       return {
-        id: stcode || `id_${Math.random()}`,
+        id: stcode,
         stcode: stcode,
         name: g("crname") || '\uC815\uBCF4 \uC5C6\uC74C',
         addr: g("craddr"),
-        lat: parseFloat(g("la")) || 37.5,
-        lng: parseFloat(g("lo")) || 127.0,
+        lat: baseLat + latOffset,
+        lng: baseLng + lngOffset,
         type, 
         color: TYPE_COLORS[type] || TYPE_COLORS[TYPE_ETC],
         tel: g("crtelno"),
@@ -114,6 +172,7 @@ export const getDaycares = async (arcode = '') => {
         waitingCount: n("EW_CNT_TOT"),
         openingDate: g("crcnfmdt") || g("CRCNFMDT") || '미상',
         schoolbus: g("crcargbname") || g("CRCARGBNAME") || '미운영',
+        status: g("crstatusname") || g("CRSTATUSNAME"),
         
         // Detailed Breakdowns directly from 030 XML
         classBreakdown: {
@@ -150,9 +209,11 @@ export const getDaycares = async (arcode = '') => {
       };
     });
 
+    const filteredData = data.filter(dc => !dc.status || !dc.status.includes('폐지'));
+
     // Store in cache
-    daycareCache.set(arcode, { data, timestamp: Date.now() });
-    return data;
+    daycareCache.set(arcode, { data: filteredData, timestamp: Date.now() });
+    return filteredData;
   } catch (e) { console.error('Fetch error 030', e); return []; }
 };
 
@@ -170,7 +231,7 @@ export const getCachedDaycares = (arcode) => {
   return null;
 };
 
-export const getMultiRegionDaycares = async (points) => {
+export const getMultiRegionDaycares = async (points, onProgress = null) => {
   const arcodes = new Set();
   
   // Get region codes for all sample points
@@ -190,22 +251,46 @@ export const getMultiRegionDaycares = async (points) => {
 
   if (arcodes.size === 0) return [];
 
-  // Fetch all districts in parallel
-  const results = await Promise.all(Array.from(arcodes).map(code => getDaycares(code)));
-  
-  // Merge and deduplicate by stcode
-  const merged = results.flat();
-  const unique = [];
-  const seen = new Set();
-  
-  merged.forEach(dc => {
-    if (!seen.has(dc.stcode)) {
-      seen.add(dc.stcode);
-      unique.push(dc);
+  // Deduplication helper
+  const dedupe = (arr) => {
+    const unique = [];
+    const seen = new Set();
+    arr.forEach(dc => {
+      if (!seen.has(dc.stcode)) {
+        seen.add(dc.stcode);
+        unique.push(dc);
+      }
+    });
+    return unique;
+  };
+
+  // FAST PATH: Check cache first
+  let cachedData = [];
+  let missingArcodes = [];
+
+  Array.from(arcodes).forEach(code => {
+    const cached = getCachedDaycares(code);
+    if (cached) {
+      cachedData.push(...cached);
+    } else {
+      missingArcodes.push(code);
     }
   });
 
-  return unique;
+  cachedData = dedupe(cachedData);
+
+  // If we have any cached data, instantly render it!
+  if (onProgress && cachedData.length > 0) {
+    onProgress(cachedData);
+  }
+
+  // SLOW PATH: Fetch missing districts in parallel
+  if (missingArcodes.length > 0) {
+    const results = await Promise.all(missingArcodes.map(code => getDaycares(code)));
+    return dedupe([...cachedData, ...results.flat()]);
+  }
+
+  return cachedData;
 };
 
 export const getDaycaresDetailed = async (stcode, arcode) => {
@@ -313,41 +398,37 @@ export const isJobMatchingDaycare = (job, daycare) => {
   const searchName = normalize(job.center_name);
   const dcName = normalize(daycare.name);
   
-  // 1. Name match - must be almost exact for the core name
-  // To avoid matching "I-Park" to "Samsung I-Park" and "Hyundai I-Park" simultaneously
-  if (searchName !== dcName && !searchName.includes(dcName) && !dcName.includes(searchName)) return false;
+  // 1. Name match - 100% strict equality after removing spaces/brackets
+  if (searchName !== dcName) return false;
   
-  // 2. Location validation - go beyond Sigungu if possible
-  const dcSido = daycare.addr ? daycare.addr.substring(0, 2) : (daycare.office ? daycare.office.substring(0, 2) : '');
+  // 2. Location validation - Reasonable match (at least District level)
   const jobLoc = job.location || '';
   const jobAddr = job.metadata ? (job.metadata['소재지'] || job.metadata['근무지 주소'] || '') : '';
-  const nJobAddr = normalize(`${jobLoc} ${jobAddr}`);
-  const nDcAddr = normalize(daycare.addr || '');
+  const fullJobAddr = normalize(`${jobLoc} ${jobAddr}`);
   
-  // Sido check (인천, 서울, 광주 등)
-  if (dcSido && !nJobAddr.includes(dcSido)) return false;
+  const dcAddr = daycare.addr || '';
+  const nDcAddr = normalize(dcAddr);
   
-  // Sigungu check (서구, 중구 등)
-  const dcDistrict = daycare.office ? daycare.office.split(' ')[1] : '';
-  if (dcDistrict && !nJobAddr.includes(dcDistrict.replace('청', ''))) return false;
-
-  // 3. Dong / Road level check - Crucial for 1:1 matching
-  // a) Extract from meta address
-  if (jobAddr && daycare.addr) {
-    const jobDong = jobAddr.match(/(\w+동|\w+로 \d+)/); 
-    if (jobDong) {
-      const matchKey = normalize(jobDong[0]);
-      if (!nDcAddr.includes(matchKey)) return false;
-    }
+  // Extract Sido & District from daycare address
+  const addrParts = dcAddr.split(' ');
+  const dcSido = dcAddr.substring(0, 2);
+  let dcDistrict = '';
+  if (addrParts.length >= 2) {
+    dcDistrict = addrParts[1].replace('청', '').replace('시', '').replace('구', '').replace('군', '');
   }
 
-  // b) Extract more specific location from TITLE (often in brackets like [마전동])
-  if (job.title && daycare.addr) {
-    const titleDong = job.title.match(/\[(\w+동)\]/);
-    if (titleDong) {
-      const matchKey = normalize(titleDong[1]);
-      if (!nDcAddr.includes(matchKey)) return false;
-    }
+  // If we have address info, they must share the same region (at least start with same Sido/District)
+  if (dcSido && !fullJobAddr.includes(dcSido)) return false;
+  if (dcDistrict && !fullJobAddr.includes(dcDistrict)) return false;
+
+  // 3. One more check: If the job title or metadata has a very specific Dong, verify it
+  const jobDong = jobAddr.match(/(\w+동|\w+읍|\w+면)/);
+  if (jobDong) {
+    // Some job portals use administrative dongs (가정1동, 서초2동), but daylight API uses legal dongs (가정동, 서초동).
+    // Strip numeric characters right before '동' to ensure robust matching.
+    const rawDong = jobDong[0];
+    const matchKey = normalize(rawDong.replace(/[0-9]+(동)$/, '$1'));
+    if (nDcAddr.length > 5 && !nDcAddr.includes(matchKey)) return false;
   }
   
   return true;

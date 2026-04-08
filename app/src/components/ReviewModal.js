@@ -19,7 +19,6 @@ export default function ReviewModal({ visible, onClose, daycare, user, onSuccess
       const reviewData = {
         user_id: user.id,
         center_id: daycare.stcode,
-        center_name: daycare.name,
         rating: rating,
         content: content,
         created_at: new Date().toISOString()

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView, SafeAreaView, Switch } from 'react-native';
+import { View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView, SafeAreaView, Switch, InteractionManager } from 'react-native';
 import { X, RotateCcw, Star, Check, Sparkles, Filter, Bus, Briefcase } from 'lucide-react-native';
 import { useSearch } from '../contexts/SearchContext';
 import { TYPE_GOK, TYPE_GAJUNG, TYPE_MIN, TYPE_JIK, TYPE_ETC } from '../services/dataService';
@@ -30,8 +30,11 @@ export default function FilterModal({ visible, onClose }) {
   };
 
   const apply = () => {
-    setFilters(localFilters);
     onClose();
+    // Delay expensive filter update until modal animation is done
+    InteractionManager.runAfterInteractions(() => {
+      setFilters(localFilters);
+    });
   };
 
   const reset = () => {
@@ -41,7 +44,9 @@ export default function FilterModal({ visible, onClose }) {
       types: [],
       busOnly: false,
       hiringOnly: false,
-      services: []
+      services: [],
+      admissionAge: null,
+      nameQuery: ''
     };
     setLocalFilters(defaultFilters);
     resetFilters();
@@ -64,7 +69,7 @@ export default function FilterModal({ visible, onClose }) {
           {/* 1. Parent Rating */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Star size={18} color="#F59E0B" fill="#F59E0B" />
+              <Star size={18} color="#75BA57" fill="#75BA57" />
               <Text style={styles.sectionTitle}>학부모 평점</Text>
             </View>
             <View style={styles.optionsRow}>
@@ -85,7 +90,7 @@ export default function FilterModal({ visible, onClose }) {
           {/* 2. Teacher Rating (New) */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Sparkles size={18} color="#8B5CF6" />
+              <Star size={18} color="#4A6CF7" fill="#4A6CF7" />
               <Text style={styles.sectionTitle}>선생님 평점</Text>
             </View>
             <View style={styles.optionsRow}>
@@ -101,6 +106,34 @@ export default function FilterModal({ visible, onClose }) {
                 </TouchableOpacity>
               ))}
             </View>
+          </View>
+
+          {/* 2.5 Admission Probability (New) */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Sparkles size={18} color="#75BA57" />
+              <Text style={styles.sectionTitle}>입소 가능성 높은 어린이집 찾기(연령)</Text>
+            </View>
+            <View style={[styles.optionsRow, { flexWrap: 'wrap', gap: 8 }]}>
+              {[null, 0, 1, 2, 3, 4, 5].map(age => (
+                <TouchableOpacity 
+                  key={age === null ? 'none' : age} 
+                  style={[
+                    styles.optionBtn, 
+                    { width: '23%', flex: 0 }, 
+                    localFilters.admissionAge === age && styles.optionBtnActive
+                  ]}
+                  onPress={() => setLocalFilters(prev => ({...prev, admissionAge: age}))}
+                >
+                  <Text style={[styles.optionText, localFilters.admissionAge === age && styles.optionTextActive]}>
+                    {age === null ? '안함' : `만 ${age}세`}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <Text style={{ fontSize: 12, color: '#94A3B8', marginTop: 8, fontWeight: '500' }}>
+              * 선택한 연령의 정원이 현원보다 여유 있는 시설만 노출합니다.
+            </Text>
           </View>
 
           {/* 3. Hiring & Bus */}
@@ -205,8 +238,8 @@ const styles = StyleSheet.create({
 
   optionsRow: { flexDirection: 'row', gap: 10 },
   optionBtn: { flex: 1, height: 48, borderRadius: 16, backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#F1F5F9', shadowColor: '#000', shadowOpacity: 0.02, shadowRadius: 5, elevation: 1 },
-  optionBtnActive: { backgroundColor: '#F59E0B', borderColor: '#F59E0B' },
-  optionBtnActiveTeacher: { backgroundColor: '#8B5CF6', borderColor: '#8B5CF6' },
+  optionBtnActive: { backgroundColor: '#75BA57', borderColor: '#75BA57' },
+  optionBtnActiveTeacher: { backgroundColor: '#4A6CF7', borderColor: '#4A6CF7' },
   optionText: { fontSize: 14, color: '#64748B', fontWeight: '800' },
   optionTextActive: { color: '#fff' },
   

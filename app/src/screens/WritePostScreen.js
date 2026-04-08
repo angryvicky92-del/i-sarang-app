@@ -1,17 +1,21 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, Alert, KeyboardAvoidingView, Platform, ScrollView, Image } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, KeyboardAvoidingView, Platform, ScrollView, Image } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../services/supabaseClient';
 import { useAuth } from '../contexts/AuthContext';
 import { X, Image as ImageIcon } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
+import * as ImageManipulator from 'expo-image-manipulator';
 import { decode } from 'base64-arraybuffer';
+import { useTheme } from '../contexts/ThemeContext';
 
-export default function WritePostScreen({ navigation }) {
+export default function WritePostScreen({ route, navigation }) {
   const { session, profile } = useAuth();
+  const { colors, isDarkMode } = useTheme();
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
-  const [imageUri, setImageUri] = useState(null);
-  const [imageBase64, setImageBase64] = useState(null);
+  const [imageUris, setImageUris] = useState([]);
+  const [imageBase64s, setImageBase64s] = useState([]);
   const [loading, setLoading] = useState(false);
 
   const pickImage = async () => {
@@ -22,13 +26,34 @@ export default function WritePostScreen({ navigation }) {
     }
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      quality: 0.7,
+      allowsMultipleSelection: true,
+      selectionLimit: 5,
+      quality: 0.8,
       base64: true,
     });
     if (!result.canceled) {
-      setImageUri(result.assets[0].uri);
-      setImageBase64(result.assets[0].base64);
+      setLoading(true);
+      try {
+        const processedAssets = await Promise.all(result.assets.map(async (asset) => {
+          // Only resize if original width > 1200
+          const actions = asset.width > 1200 ? [{ resize: { width: 1200 } }] : [];
+          return await ImageManipulator.manipulateAsync(
+            asset.uri,
+            actions,
+            { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG, base64: true }
+          );
+        }));
+
+        const newUris = processedAssets.map(a => a.uri);
+        const newBase64s = processedAssets.map(a => a.base64);
+        setImageUris(prev => [...prev, ...newUris].slice(0, 5));
+        setImageBase64s(prev => [...prev, ...newBase64s].slice(0, 5));
+      } catch (e) {
+        console.error('Image optimization error', e);
+        Alert.alert('알림', '이미지 처리 중 오류가 발생했습니다.');
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
@@ -39,27 +64,36 @@ export default function WritePostScreen({ navigation }) {
     }
 
     if (!session || !profile) {
-      Alert.alert('알림', '로그인이 필요한 서비스입니다.');
+      Alert.alert('알림', '로그인이 필요한 서비스입니다.', [
+        { text: '취소', style: 'cancel' },
+        { text: '로그인', onPress: () => navigation.navigate('Login') }
+      ]);
       return;
     }
 
     setLoading(true);
     try {
-      let imageUrl = null;
-      if (imageBase64 && imageUri) {
-        const fileExt = imageUri.split('.').pop() || 'jpg';
-        const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
-        const filePath = `${session.user.id}/${fileName}`;
+      let imageUrls = [];
+      if (imageBase64s.length > 0) {
+        for (let i = 0; i < imageBase64s.length; i++) {
+          const uri = imageUris[i];
+          const b64 = imageBase64s[i];
+          const fileExt = uri.split('.').pop() || 'jpg';
+          const fileName = `${Date.now()}_${i}_${Math.random().toString(36).substring(7)}.${fileExt}`;
+          const filePath = `${session.user.id}/${fileName}`;
 
-        const { data: uploadData, error: uploadError } = await supabase.storage
-          .from('community')
-          .upload(filePath, decode(imageBase64), { contentType: `image/${fileExt}` });
+          const { error: uploadError } = await supabase.storage
+            .from('community')
+            .upload(filePath, decode(b64), { contentType: `image/${fileExt}` });
 
-        if (uploadError) throw uploadError;
-        
-        const { data: publicUrlData } = supabase.storage.from('community').getPublicUrl(filePath);
-        imageUrl = publicUrlData.publicUrl;
+          if (uploadError) throw uploadError;
+          
+          const { data: publicUrlData } = supabase.storage.from('community').getPublicUrl(filePath);
+          imageUrls.push(publicUrlData.publicUrl);
+        }
       }
+
+      const targetBoardType = route.params?.boardType === 'teacher' ? '선생님' : '학부모';
 
       const { error } = await supabase.from('posts').insert([
         {
@@ -67,8 +101,10 @@ export default function WritePostScreen({ navigation }) {
           author: profile.nickname || '익명',
           title: title.trim(),
           content: content.trim(),
-          type: profile.role === 'teacher' ? '선생님' : '학부모',
-          image_url: imageUrl
+          type: targetBoardType,
+          type: targetBoardType,
+          image_url: imageUrls[0] || null, // First image for legacy/list view
+          image_urls: imageUrls
         }
       ]);
 
@@ -85,14 +121,14 @@ export default function WritePostScreen({ navigation }) {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.flex1}>
-        <View style={styles.header}>
+        <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.closeBtn}>
-            <X size={24} color="#1E293B" />
+            <X size={24} color={colors.text} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>글쓰기</Text>
-          <TouchableOpacity onPress={handleSubmit} disabled={loading} style={styles.submitBtn}>
+          <Text style={[styles.headerTitle, { color: colors.text }]}>글쓰기</Text>
+          <TouchableOpacity onPress={handleSubmit} disabled={loading} style={[styles.submitBtn, { backgroundColor: colors.primary }]}>
             <Text style={[styles.submitText, loading && styles.disabledText]}>
               {loading ? '등록중' : '등록'}
             </Text>
@@ -101,36 +137,51 @@ export default function WritePostScreen({ navigation }) {
 
         <ScrollView contentContainerStyle={styles.form}>
           <TextInput
-            style={styles.inputTitle}
+            style={[styles.inputTitle, { color: colors.text, borderBottomColor: colors.border }]}
             placeholder="제목을 입력하세요."
-            placeholderTextColor="#94A3B8"
+            placeholderTextColor={colors.textMuted}
             value={title}
             onChangeText={setTitle}
             maxLength={50}
           />
           <TextInput
-            style={styles.inputContent}
+            style={[styles.inputContent, { color: colors.textSecondary }]}
             placeholder="내용을 자유롭게 남겨주세요."
-            placeholderTextColor="#94A3B8"
+            placeholderTextColor={colors.textMuted}
             value={content}
             onChangeText={setContent}
             multiline
             textAlignVertical="top"
           />
           
-          <View style={styles.imageSection}>
-            <TouchableOpacity style={styles.imageBtn} onPress={pickImage}>
-              <ImageIcon size={24} color="#64748B" />
-              <Text style={styles.imageBtnText}>사진 첨부하기</Text>
-            </TouchableOpacity>
+          <View style={[styles.imageSection, { borderTopColor: colors.border }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+              <TouchableOpacity style={[styles.imageBtn, { backgroundColor: colors.card }]} onPress={pickImage} disabled={imageUris.length >= 5}>
+                <ImageIcon size={20} color={imageUris.length >= 5 ? colors.textMuted : colors.primary} />
+                <Text style={[styles.imageBtnText, { color: imageUris.length >= 5 ? colors.textMuted : colors.text }]}>사진 첨부 ({imageUris.length}/5)</Text>
+              </TouchableOpacity>
+              {imageUris.length > 0 && (
+                <Text style={{ fontSize: 12, color: colors.textMuted }}>좌우로 밀어서 확인</Text>
+              )}
+            </View>
             
-            {imageUri && (
-              <View style={styles.imagePreviewContainer}>
-                <Image source={{ uri: imageUri }} style={styles.imagePreview} />
-                <TouchableOpacity style={styles.removeImageBtn} onPress={() => { setImageUri(null); setImageBase64(null); }}>
-                  <X size={16} color="#FFF" />
-                </TouchableOpacity>
-              </View>
+            {imageUris.length > 0 && (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.imageScroll}>
+                {imageUris.map((uri, index) => (
+                  <View key={index} style={styles.imagePreviewContainer}>
+                    <Image source={{ uri }} style={styles.imagePreview} resizeMode="cover" />
+                    <TouchableOpacity 
+                      style={[styles.removeImageBtn, { backgroundColor: isDarkMode ? '#4A5568' : '#1A202C' }]} 
+                      onPress={() => {
+                        setImageUris(prev => prev.filter((_, i) => i !== index));
+                        setImageBase64s(prev => prev.filter((_, i) => i !== index));
+                      }}
+                    >
+                      <X size={14} color="#FFF" />
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </ScrollView>
             )}
           </View>
         </ScrollView>
@@ -140,21 +191,22 @@ export default function WritePostScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
+  container: { flex: 1 },
   flex1: { flex: 1 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1 },
   closeBtn: { padding: 4 },
-  headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#1E293B' },
-  submitBtn: { paddingHorizontal: 16, paddingVertical: 8, backgroundColor: '#75BA57', borderRadius: 20 },
+  headerTitle: { fontSize: 18, fontWeight: 'bold' },
+  submitBtn: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 },
   submitText: { color: '#fff', fontWeight: 'bold', fontSize: 14 },
   disabledText: { opacity: 0.7 },
   form: { padding: 20 },
-  inputTitle: { fontSize: 20, fontWeight: 'bold', color: '#1E293B', marginBottom: 20, borderBottomWidth: 1, borderBottomColor: '#E2E8F0', paddingBottom: 12 },
-  inputContent: { fontSize: 16, color: '#334155', minHeight: 200, lineHeight: 24, marginBottom: 20 },
-  imageSection: { marginTop: 10, borderTopWidth: 1, borderTopColor: '#F1F5F9', paddingTop: 20 },
-  imageBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8F9FA', padding: 12, borderRadius: 12, alignSelf: 'flex-start' },
-  imageBtnText: { marginLeft: 8, color: '#64748B', fontWeight: 'bold' },
-  imagePreviewContainer: { marginTop: 16, position: 'relative', width: 120, height: 120 },
-  imagePreview: { width: 120, height: 120, borderRadius: 12 },
-  removeImageBtn: { position: 'absolute', top: -8, right: -8, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 12, padding: 4 }
+  inputTitle: { fontSize: 20, fontWeight: 'bold', marginBottom: 20, borderBottomWidth: 1, paddingBottom: 12 },
+  inputContent: { fontSize: 16, minHeight: 200, lineHeight: 24, marginBottom: 20 },
+  imageSection: { marginTop: 10, borderTopWidth: 1, paddingTop: 20 },
+  imageBtn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10, alignSelf: 'flex-start' },
+  imageBtnText: { marginLeft: 8, fontWeight: 'bold', fontSize: 14 },
+  imageScroll: { paddingRight: 20, gap: 12, paddingVertical: 10 },
+  imagePreviewContainer: { position: 'relative', width: 100, height: 100, borderRadius: 12 },
+  imagePreview: { width: 100, height: 100, borderRadius: 12 },
+  removeImageBtn: { position: 'absolute', top: -6, right: -6, borderRadius: 12, padding: 4, elevation: 5, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 3, shadowOffset: { width: 0, height: 2 }, zIndex: 10 }
 });

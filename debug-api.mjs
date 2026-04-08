@@ -1,35 +1,43 @@
-import fetch from 'node-fetch';
-import dotenv from 'dotenv';
-dotenv.config();
+import axios from 'axios';
 
-const API_KEY = process.env.VITE_CHILDCARE_API_KEY;
-const API_URL = 'http://api.childcare.go.kr/mediate/rest/cpmsapi030/cpmsapi030/request';
+const TOURISM_API_KEY = '17786a2939036ec9606cb611a87546032109aa3dba9ca7eaefb87793c22b1f51';
+const BASE_URL = 'https://apis.data.go.kr/B551011/KorService2';
 
-async function debugAPI() {
-  const arcode = '11680'; // 강남구
-  console.log(`Checking API for arcode: ${arcode}...`);
-  console.log(`API Key prefix: ${API_KEY?.substring(0, 5)}...`);
-
-  const params = new URLSearchParams({
-    key: API_KEY,
-    arcode: arcode,
-  });
-
+async function debug() {
+  const contentId = '126508'; // Gyeongbokgung
+  const contentTypeId = '12';
   try {
-    const response = await fetch(`${API_URL}?${params.toString()}`);
-    console.log(`Status: ${response.status} ${response.statusText}`);
-    
-    const text = await response.text();
-    console.log('Raw Response Content (first 500 chars):');
-    console.log(text.substring(0, 500));
+    console.log('Fetching detailCommon2 for Gyeongbokgung (126508)...');
+    const commonRes = await axios.get(`${BASE_URL}/detailCommon2`, {
+      params: {
+        serviceKey: decodeURIComponent(TOURISM_API_KEY),
+        MobileOS: 'ETC',
+        MobileApp: 'App',
+        _type: 'json',
+        contentId: contentId,
+        defaultYN: 'Y',
+        overviewYN: 'Y'
+      }
+    });
+    console.log('Common Detail:', JSON.stringify(commonRes.data?.response?.body?.items?.item, null, 2));
 
-    if (text.includes('returnState')) {
-      const stateMatch = text.match(/<returnState>(.*?)<\/returnState>/);
-      console.log('Detected returnState:', stateMatch ? stateMatch[1] : 'Not found');
-    }
-  } catch (error) {
-    console.error('Fetch Error:', error.message);
+    console.log('\nFetching detailIntro2...');
+    const introRes = await axios.get(`${BASE_URL}/detailIntro2`, {
+      params: {
+        serviceKey: decodeURIComponent(TOURISM_API_KEY),
+        MobileOS: 'ETC',
+        MobileApp: 'App',
+        _type: 'json',
+        contentId: contentId,
+        contentTypeId: contentTypeId
+      }
+    });
+    console.log('Intro Detail:', JSON.stringify(introRes.data?.response?.body?.items?.item, null, 2));
+
+  } catch (e) {
+    console.error('Error:', e.message);
+    if (e.response) console.log(JSON.stringify(e.response.data, null, 2));
   }
 }
 
-debugAPI();
+debug();

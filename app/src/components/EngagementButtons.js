@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert } from 'react-native';
 import { ThumbsUp, ThumbsDown } from 'lucide-react-native';
 import { toggleVote } from '../services/engagementService';
+import { useNavigation } from '@react-navigation/native';
 
 /**
  * 추천/비추천 버튼 컴포넌트
@@ -14,6 +15,7 @@ import { toggleVote } from '../services/engagementService';
  */
 export default function EngagementButtons({ targetType, targetId, item, userVote, userId, onUpdate }) {
   const [loading, setLoading] = useState(false);
+  const navigation = useNavigation();
 
   // Note: review uses 'likes' instead of 'upvotes'
   const upCount = targetType === 'review' ? (item.likes || 0) : (item.upvotes || 0);
@@ -21,7 +23,10 @@ export default function EngagementButtons({ targetType, targetId, item, userVote
 
   const handleVote = async (voteType) => {
     if (!userId) {
-      Alert.alert('알림', '로그인이 필요한 기능입니다.');
+      Alert.alert('알림', '로그인이 필요한 기능입니다.', [
+        { text: '취소', style: 'cancel' },
+        { text: '로그인', onPress: () => navigation.navigate('Login') }
+      ]);
       return;
     }
 
@@ -35,16 +40,16 @@ export default function EngagementButtons({ targetType, targetId, item, userVote
     let newUserVote = isRemoving ? 0 : voteType;
 
     if (voteType === 1) {
-      if (isRemoving) newUp--;
+      if (isRemoving) newUp = Math.max(0, newUp - 1);
       else {
         newUp++;
-        if (isChanging) newDown--;
+        if (isChanging) newDown = Math.max(0, newDown - 1);
       }
     } else {
-      if (isRemoving) newDown--;
+      if (isRemoving) newDown = Math.max(0, newDown - 1);
       else {
         newDown++;
-        if (isChanging) newUp--;
+        if (isChanging) newUp = Math.max(0, newUp - 1);
       }
     }
 

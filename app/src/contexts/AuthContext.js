@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../services/supabaseClient';
 
 const AuthContext = createContext();
@@ -11,11 +12,30 @@ export const AuthProvider = ({ children }) => {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      if (session) fetchProfile(session.user.id);
-      else setIsLoading(false);
-    });
+    // Handle 'Stay Logged In' preference
+    const initializeAuth = async () => {
+      try {
+        const stay = await AsyncStorage.getItem('@stay_logged_in');
+        const { data: { session: currentSession } } = await supabase.auth.getSession();
+        
+        if (stay === 'false' && currentSession) {
+          await supabase.auth.signOut();
+          setSession(null);
+          setProfile(null);
+          setIsLoading(false);
+          return;
+        }
+
+        setSession(currentSession);
+        if (currentSession) fetchProfile(currentSession.user.id);
+        else setIsLoading(false);
+      } catch (e) {
+        console.error('Auth initialization error', e);
+        setIsLoading(false);
+      }
+    };
+
+    initializeAuth();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);

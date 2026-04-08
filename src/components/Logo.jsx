@@ -1,4 +1,5 @@
 import React from 'react';
+import customIcon from '../assets/custom_icon.png';
 
 export default function Logo({ width = 140, height = 45, className = '', style = {} }) {
   return (
@@ -26,9 +27,8 @@ export default function Logo({ width = 140, height = 45, className = '', style =
         <path d="M 35 60 L 58 85 L 115 25" stroke="var(--primary, #75BA57)" strokeWidth="11" strokeLinecap="round" strokeLinejoin="round"/>
       </g>
       
-      {/* 텍스트 그룹 */}
-      <text x="58" y="32" fontFamily="'Pretendard', sans-serif" fontWeight="800" fontSize="24" fill="var(--primary-dark, #2D4C3B)" letterSpacing="-1.5">얼집체크</text>
-      <text x="59" y="44" fontFamily="'Pretendard', sans-serif" fontWeight="700" fontSize="8" fill="var(--primary-dark, #2D4C3B)" letterSpacing="1.8">ULZIP CHECK</text>
+      {/* 텍스트 영역 대체할 새로운 아이콘 이미지 */}
+      <image href={customIcon} x="58" y="5" width="40" height="40" />
     </svg>
   );
 }

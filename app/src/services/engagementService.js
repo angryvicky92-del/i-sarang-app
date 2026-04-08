@@ -10,100 +10,22 @@ import { supabase } from './supabaseClient';
 export const toggleVote = async (targetType, targetId, userId, voteType) => {
   if (!['post', 'comment', 'review'].includes(targetType)) return null;
 
-  const voteTable = `${targetType}_votes`;
-  const mainTable = targetType === 'review' ? 'reviews' : (targetType === 'comment' ? 'post_comments' : 'posts');
-  const idField = `${targetType}_id`;
-
   try {
-    // 1. 기존 투표 확인
-    const { data: existingVote, error: fetchError } = await supabase
-      .from(voteTable)
-      .select('*')
-      .eq('user_id', userId)
-      .eq(idField, targetId)
-      .single();
+    // Use RPC to handle both the vote record and the count update atomically
+    // This also bypasses RLS issues on the content tables (posts, reviews, etc.)
+    const { data, error } = await supabase.rpc('toggle_vote_rpc', {
+      p_target_type: targetType,
+      p_target_id: targetId,
+      p_user_id: userId,
+      p_vote_type: voteType
+    });
 
-    if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 is "No rows found"
-      console.error(`Error fetching existing vote for ${targetType}:`, fetchError);
-      return null;
-    }
+    if (error) throw error;
 
-    let diffUp = 0;
-    let diffDown = 0;
-
-    if (existingVote) {
-      if (existingVote.vote_type === voteType) {
-        // 같은 버튼을 또 누름 -> 투표 취소
-        const { error: deleteError } = await supabase
-          .from(voteTable)
-          .delete()
-          .eq('id', existingVote.id);
-        
-        if (deleteError) throw deleteError;
-        
-        if (voteType === 1) diffUp = -1;
-        else diffDown = -1;
-      } else {
-        // 반대 버튼을 누름 -> 투표 변경
-        const { error: updateError } = await supabase
-          .from(voteTable)
-          .update({ vote_type: voteType })
-          .eq('id', existingVote.id);
-        
-        if (updateError) throw updateError;
-        
-        if (voteType === 1) { // -1 -> 1
-          diffUp = 1;
-          diffDown = -1;
-        } else { // 1 -> -1
-          diffUp = -1;
-          diffDown = 1;
-        }
-      }
-    } else {
-      // 신규 투표
-      const { error: insertError } = await supabase
-        .from(voteTable)
-        .insert([{
-          user_id: userId,
-          [idField]: targetId,
-          vote_type: voteType
-        }]);
-      
-      if (insertError) throw insertError;
-      
-      if (voteType === 1) diffUp = 1;
-      else diffDown = 1;
-    }
-
-    // 2. 메인 테이블의 카운트 업데이트
-    // Note: 'reviews' uses 'likes' instead of 'upvotes' for historical reasons (from reviewService.js)
-    const upField = targetType === 'review' ? 'likes' : 'upvotes';
-    const downField = targetType === 'review' ? 'dislikes' : 'downvotes';
-
-    const { data: current, error: getError } = await supabase
-      .from(mainTable)
-      .select(`${upField}, ${downField}`)
-      .eq('id', targetId)
-      .single();
-
-    if (getError) throw getError;
-
-    const newUp = Math.max(0, (current[upField] || 0) + diffUp);
-    const newDown = Math.max(0, (current[downField] || 0) + diffDown);
-
-    const { data: updated, error: finalError } = await supabase
-      .from(mainTable)
-      .update({ [upField]: newUp, [downField]: newDown })
-      .eq('id', targetId)
-      .select()
-      .single();
-
-    if (finalError) throw finalError;
-
-    return { 
-      ...updated, 
-      userVote: diffUp + diffDown === 0 ? voteType : (diffUp > 0 || diffDown > 0 ? voteType : 0) 
+    // The RPC returns { data: { ...row }, userVote: N }
+    return {
+      ...data.data,
+      userVote: data.userVote
     };
 
   } catch (error) {
@@ -118,7 +40,8 @@ export const toggleVote = async (targetType, targetId, userId, voteType) => {
 export const getMyVotes = async (targetType, targetIds, userId) => {
   if (!userId || !targetIds || targetIds.length === 0) return {};
   
-  const voteTable = `${targetType}_votes`;
+  const isReview = targetType === 'review';
+  const voteTable = isReview ? 'review_likes' : `${targetType}_votes`;
   const idField = `${targetType}_id`;
 
   try {
