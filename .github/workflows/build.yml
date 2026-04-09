@@ -46,8 +46,8 @@ jobs:
           NODE_OPTIONS: "--max-old-space-size=4096"
           GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=512m"
         run: |
-          # Added --clear-cache and --verbose for debugging
-          npx eas-cli build --platform android --profile production --local --non-interactive --clear-cache --verbose --output=./uljip_check_v2.aab
+          # Removed --verbose as it is an unexpected argument for eas build
+          npx eas-cli build --platform android --profile production --local --non-interactive --clear-cache --output=./uljip_check_v2.aab
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
