@@ -104,64 +104,51 @@ async function crawl() {
           const metadata = {};
           let description = '';
 
-          // 1. Precise Title Extraction from Table (Based on user screenshot)
-          const rows = Array.from(document.querySelectorAll('tr'));
-          for (const row of rows) {
-            const th = row.querySelector('th');
-            const td = row.querySelector('td');
-            if (th && td && th.innerText.trim() === '제목') {
-              metadata['채용제목'] = td.innerText.trim();
-              break;
-            }
-          }
+          // 1. Core Metadata & Title Extraction from Table
+          const table = document.querySelector('table.table_view') || 
+                        document.querySelector('.com_view table') || 
+                        document.querySelector('table.board_view') || 
+                        document.querySelector('table.tbl_view') || 
+                        document.querySelector('.com_table table');
 
-          // 2. Precise Content Extraction (Based on user screenshot: .con_con)
-          const conCon = document.querySelector('.con_con');
-          if (conCon && conCon.innerText.trim().length > 5) {
-            description = conCon.innerText.trim();
-          }
-          
-          if (!description) {
-            // Updated table selector for central.childcare.go.kr
-            const table = document.querySelector('table.table_view') || 
-                          document.querySelector('.com_view table') || 
-                          document.querySelector('table.board_view') || 
-                          document.querySelector('table.tbl_view') || 
-                          document.querySelector('.com_table table');
-                          
-            if (table) {
-              const tableRows = table.querySelectorAll('tr');
-              tableRows.forEach((row) => {
-                const thList = row.querySelectorAll('th');
-                const tdList = row.querySelectorAll('td');
-                
-                for(let i=0; i < thList.length; i++) {
-                  const label = thList[i].innerText.trim();
-                  const value = tdList[i] ? tdList[i].innerText.trim() : '';
-                  if (!label) continue;
+          if (table) {
+            const tableRows = table.querySelectorAll('tr');
+            tableRows.forEach((row) => {
+              const thList = row.querySelectorAll('th');
+              const tdList = row.querySelectorAll('td');
+              
+              for(let i=0; i < thList.length; i++) {
+                const label = thList[i].innerText.trim();
+                const value = tdList[i] ? tdList[i].innerText.trim() : '';
+                if (!label) continue;
 
-                  if (!metadata['채용제목'] && (label === '제목' || label === '채용제목' || label === '모집제목' || label === '채용 제목')) {
-                    metadata['채용제목'] = value;
-                  } else if (!['등록자', '등록일', '조회'].includes(label)) {
-                    // Standardize common keys for the UI
-                    let key = label;
-                    if (['임금', '급여', '보수'].includes(label)) key = '임금';
-                    if (['연락처', '전화번호', '휴대전화', '담당자전화번호', '담당자 전화번호'].includes(label)) key = '연락처';
-                    if (['담당자', '담당자명'].includes(label)) key = '담당자명';
-                    if (['직종', '모집직종'].includes(label)) key = '모집직종';
-                    if (['소재지', '근무지주소', '근무지 주소'].includes(label)) key = '소재지';
-                    
-                    metadata[key] = value;
+                if (!metadata['채용제목'] && (label === '제목' || label === '채용제목' || label === '모집제목' || label === '채용 제목')) {
+                  metadata['채용제목'] = value;
+                } else if (!['등록자', '등록일', '조회'].includes(label)) {
+                  // Standardize common keys for the UI
+                  let key = label;
+                  if (['임금', '급여', '보수'].includes(label)) key = '임금';
+                  if (['연락처', '전화번호', '휴대전화', '담당자전화번호', '담당자 전화번호'].includes(label)) key = '연락처';
+                  if (['담당자', '담당자명'].includes(label)) key = '담당자명';
+                  if (['직종', '모집직종'].includes(label)) key = '모집직종';
+                  if (['소재지', '근무지주소', '근무지 주소'].includes(label)) key = '소재지';
+                  
+                  metadata[key] = value;
+                  
+                  // If the label is '내용', it's a strong candidate for description
+                  if (label === '내용' && value.length > 5) {
+                    description = value;
                   }
                 }
-              });
-            }
-            
-            // Enhanced content selectors fallback
+              }
+            });
+          }
+
+          // 2. Precise Content Extraction Fallbacks (If description is still empty)
+          if (!description) {
             const contentSelectors = [
-              '.view_cont', '.con_area', '.board_view_cont', 
-              '.con_con', '.view_area', '#contents .txt', 
-              '.bbs_view_content', '.view_type01'
+              '.con_con', '.view_cont', '.con_area', '.board_view_cont', 
+              '.view_area', '#contents .txt', '.bbs_view_content', '.view_type01'
             ];
             
             for (const selector of contentSelectors) {
@@ -173,7 +160,7 @@ async function crawl() {
             }
           }
 
-          // Table header fallback for title
+          // 3. Final Fallback for Title
           if (!metadata['채용제목'] && table) {
             const firstRow = table.querySelector('tr');
             const td = firstRow ? firstRow.querySelector('td') : null;
