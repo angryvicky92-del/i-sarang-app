@@ -40,13 +40,15 @@ jobs:
         working-directory: app
         run: npm install
 
-      - name: Build Android AAB (Free Local Build with High Memory)
+      - name: Build Android AAB (High Memory & Debug Mode)
         working-directory: app
         env:
-          NODE_OPTIONS: "--max-old-space-size=4096"
-          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=512m"
+          NODE_OPTIONS: "--max-old-space-size=6144"
+          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx6144m -XX:MaxMetaspaceSize=1024m"
+          EXPO_DEBUG: "true"
+          EAS_BUILD_NO_EXPO_GO_WARNING: "true"
         run: |
-          # Removed --verbose as it is an unexpected argument for eas build
+          # Final attempt with maximum resources and debug logging
           npx eas-cli build --platform android --profile production --local --non-interactive --clear-cache --output=./uljip_check_v2.aab
 
       - name: Upload Artifact
