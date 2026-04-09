@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, ActivityIndicator, TextInput, KeyboardAvoidingView, Platform, Alert } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChevronLeft, User, Calendar, MessageSquare, Send, Trash2, Edit2, X, Eye, Check } from 'lucide-react-native';
 import { supabase } from '../services/supabaseClient';
 import { useAuth } from '../contexts/AuthContext';
@@ -233,15 +233,27 @@ export default function PostDetailScreen({ route, navigation }) {
   const handleUpdateComment = useCallback(async (commentId) => {
     if (!editCommentContent.trim()) return;
     try {
-      const { error } = await supabase
+      // Use .select() to verify the update actually occurred in the DB (RLS check)
+      const { data, error } = await supabase
         .from('post_comments')
         .update({ content: editCommentContent.trim() })
-        .eq('id', commentId);
+        .eq('id', commentId)
+        .select();
       
       if (error) throw error;
+      
+      if (!data || data.length === 0) {
+        Alert.alert('알림', '사용자 권한이 없거나 이미 삭제된 댓글입니다.');
+        setIsEditingCommentId(null);
+        fetchComments();
+        return;
+      }
+
       setIsEditingCommentId(null);
       fetchComments();
-    } catch {
+      Alert.alert('성공', '댓글이 수정되었습니다.');
+    } catch (e) {
+      console.error('Comment update error:', e);
       Alert.alert('에러', '댓글 수정 중 문제가 발생했습니다.');
     }
   }, [editCommentContent, fetchComments]);
@@ -255,6 +267,7 @@ export default function PostDetailScreen({ route, navigation }) {
 
   const startEditingComment = (comment) => {
     setEditCommentContent(comment.content);
+    setIsEditingCommentId(comment.id);
   };
 
   const handleNicknameClick = (id, nickname, type) => {
@@ -280,6 +293,8 @@ export default function PostDetailScreen({ route, navigation }) {
     }
   }, [selectedUser, profile, navigation]);
 
+  const insets = useSafeAreaInsets();
+
   if (loading) return <View style={[styles.center, { backgroundColor: colors.background }]}><ActivityIndicator color={colors.primary} /></View>;
   if (!post) return <View style={[styles.center, { backgroundColor: colors.background }]}><Text style={{ color: colors.text }}>게시글을 찾을 수 없습니다.</Text></View>;
 
@@ -289,7 +304,9 @@ export default function PostDetailScreen({ route, navigation }) {
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <ChevronLeft size={24} color={colors.text} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>게시글 상세</Text>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>
+          {isEditingPost ? '게시글 수정' : isEditingCommentId ? '댓글 수정' : '게시글 상세'}
+        </Text>
         <View style={styles.headerRight}>
           {(profile?.id === post?.user_id || profile?.user_type === '관리자') && (
             <View style={{ flexDirection: 'row' }}>
@@ -364,7 +381,8 @@ export default function PostDetailScreen({ route, navigation }) {
         </View>
 
         {isEditingPost ? (
-          <View style={styles.editPostContainer}>
+          <View style={[styles.editPostContainer, { backgroundColor: isDarkMode ? '#2D3748' : '#F7FAFC', borderColor: colors.primary, borderWidth: 1 }]}>
+            <Text style={[styles.editLabel, { color: colors.primary }]}>게시글 제목 수정</Text>
             <TextInput
               style={[styles.editTitleInput, { color: colors.text, borderBottomColor: colors.border }]}
               value={editTitle}
@@ -372,6 +390,7 @@ export default function PostDetailScreen({ route, navigation }) {
               placeholder="제목"
               placeholderTextColor={colors.textMuted}
             />
+            <Text style={[styles.editLabel, { color: colors.primary, marginTop: 16 }]}>게시글 내용 수정</Text>
             <TextInput
               style={[styles.editContentInput, { color: colors.textSecondary, borderBottomColor: colors.border }]}
               value={editContent}
@@ -381,7 +400,7 @@ export default function PostDetailScreen({ route, navigation }) {
               multiline
             />
             <TouchableOpacity style={[styles.saveBtn, { backgroundColor: colors.primary }]} onPress={handleUpdatePost} disabled={submitting}>
-              {submitting ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.saveBtnText}>게시글 수정 완료</Text>}
+              {submitting ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.saveBtnText}>수정 완료</Text>}
             </TouchableOpacity>
           </View>
         ) : (
@@ -435,7 +454,11 @@ export default function PostDetailScreen({ route, navigation }) {
           <AdBanner />
 
           {comments.map((comment) => (
-            <View key={comment.id} style={[styles.commentItem, { backgroundColor: colors.card }]}>
+            <View key={comment.id} style={[
+              styles.commentItem, 
+              { backgroundColor: colors.card },
+              isEditingCommentId === comment.id && { borderColor: colors.primary, borderWidth: 2, backgroundColor: isDarkMode ? '#1A202C' : '#F0F7FF' }
+            ]}>
               <View style={styles.commentMeta}>
                 <View style={styles.commentMetaLeft}>
                   <TouchableOpacity onPress={() => handleNicknameClick(comment.author_id, comment.author_nickname, null)} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
@@ -470,15 +493,28 @@ export default function PostDetailScreen({ route, navigation }) {
               
               {isEditingCommentId === comment.id ? (
                 <View style={styles.editCommentContainer}>
+                  <Text style={[styles.editLabelSmall, { color: colors.primary }]}>댓글 내용 수정</Text>
                   <TextInput
                     style={[styles.editCommentInput, { backgroundColor: colors.background, color: colors.text, borderColor: colors.border }]}
                     value={editCommentContent}
                     onChangeText={setEditCommentContent}
                     multiline
+                    autoFocus
                   />
-                  <TouchableOpacity style={[styles.commentSaveBtn, { backgroundColor: colors.primary }]} onPress={() => handleUpdateComment(comment.id)}>
-                    <Text style={styles.commentSaveText}>저장</Text>
-                  </TouchableOpacity>
+                  <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 8, marginTop: 12 }}>
+                    <TouchableOpacity 
+                      style={[styles.commentCancelBtn, { backgroundColor: colors.border }]} 
+                      onPress={() => setIsEditingCommentId(null)}
+                    >
+                      <Text style={[styles.commentCancelText, { color: colors.text }]}>취소</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                      style={[styles.commentSaveBtn, { backgroundColor: colors.primary }]} 
+                      onPress={() => handleUpdateComment(comment.id)}
+                    >
+                      <Text style={styles.commentSaveText}>수정 완료</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
               ) : (
                 <Text style={[styles.commentContent, { color: colors.textSecondary }]}>{comment.content}</Text>
@@ -506,7 +542,11 @@ export default function PostDetailScreen({ route, navigation }) {
         </ScrollView>
 
         {!isEditingPost && (
-          <View style={[styles.inputContainer, { borderTopColor: colors.border, backgroundColor: colors.card, paddingBottom: Platform.OS === 'ios' ? 4 : 12 }]}>
+          <View style={[styles.inputContainer, { 
+            borderTopColor: colors.border, 
+            backgroundColor: colors.card, 
+            paddingBottom: Math.max(insets.bottom, 12)
+          }]}>
             <TextInput
               style={[styles.input, { backgroundColor: colors.background, color: colors.text }]}
               placeholder="댓글을 입력하세요..."
@@ -555,16 +595,20 @@ const styles = StyleSheet.create({
   content: { padding: 20 },
   
   // Edit Styles
-  editPostContainer: { marginBottom: 24 },
-  editTitleInput: { fontSize: 18, fontWeight: 'bold', borderBottomWidth: 1, paddingVertical: 8, marginBottom: 16 },
+  editPostContainer: { marginBottom: 24, padding: 16, borderRadius: 12 },
+  editLabel: { fontSize: 13, fontWeight: 'bold', marginBottom: 4 },
+  editLabelSmall: { fontSize: 11, fontWeight: 'bold', marginBottom: 6 },
+  editTitleInput: { fontSize: 18, fontWeight: 'bold', borderBottomWidth: 1, paddingVertical: 8, marginBottom: 8 },
   editContentInput: { fontSize: 16, borderBottomWidth: 1, paddingVertical: 8, marginBottom: 16, minHeight: 150, textAlignVertical: 'top' },
-  saveBtn: { padding: 12, borderRadius: 8, alignItems: 'center' },
+  saveBtn: { padding: 12, borderRadius: 8, alignItems: 'center', marginTop: 8 },
   saveBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
   
   editCommentContainer: { marginTop: 8 },
-  editCommentInput: { borderWidth: 1, borderRadius: 8, padding: 8, fontSize: 14, minHeight: 60, textAlignVertical: 'top' },
-  commentSaveBtn: { alignSelf: 'flex-end', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6, marginTop: 8 },
-  commentSaveText: { color: '#fff', fontSize: 12, fontWeight: 'bold' },
+  editCommentInput: { borderWidth: 1, borderRadius: 8, padding: 10, fontSize: 14, minHeight: 80, textAlignVertical: 'top' },
+  commentSaveBtn: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 },
+  commentCancelBtn: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 },
+  commentSaveText: { color: '#fff', fontSize: 13, fontWeight: 'bold' },
+  commentCancelText: { fontSize: 13, fontWeight: '600' },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 },
   badge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1 },
   badgeText: { fontSize: 11, fontWeight: 'bold' },
