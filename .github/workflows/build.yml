@@ -40,18 +40,30 @@ jobs:
         working-directory: app
         run: npm install
 
-      - name: Build Android AAB (High Memory & Debug Mode)
+      - name: Build Android AAB (Full Debug Mode)
         working-directory: app
         env:
           NODE_OPTIONS: "--max-old-space-size=6144"
           GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx6144m -XX:MaxMetaspaceSize=1024m"
           EXPO_DEBUG: "true"
+          DEBUG: "eas*"
           EAS_BUILD_NO_EXPO_GO_WARNING: "true"
         run: |
-          # Final attempt with maximum resources and debug logging
+          # Running with EAS CLI local build, making sure it shows all output
           npx eas-cli build --platform android --profile production --local --non-interactive --clear-cache --output=./uljip_check_v2.aab
 
-      - name: Upload Artifact
+      - name: Upload Logs on Failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-failure-logs
+          path: |
+            app/android/build/logs
+            app/**/*.log
+            /home/runner/.npm/_logs
+
+      - name: Upload Artifact on Success
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: android-app-bundle
