@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, KeyboardAvoidingView, Platform, ScrollView, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../services/supabaseClient';
@@ -12,6 +12,7 @@ import { useTheme } from '../contexts/ThemeContext';
 export default function WritePostScreen({ route, navigation }) {
   const { session, profile } = useAuth();
   const { colors, isDarkMode } = useTheme();
+  const scrollViewRef = useRef(null);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [imageUris, setImageUris] = useState([]);
@@ -123,96 +124,109 @@ export default function WritePostScreen({ route, navigation }) {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-      <KeyboardAvoidingView 
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined} 
-        style={styles.flex1}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
-      >
-        <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+        <View style={[styles.header, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.closeBtn}>
             <X size={24} color={colors.text} />
           </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>게시글 작성</Text>
-          <TouchableOpacity onPress={handleSubmit} disabled={loading} style={[styles.submitBtn, { backgroundColor: colors.primary }]}>
-            <Text style={[styles.submitText, loading && styles.disabledText]}>
-              {loading ? '등록 중' : '등록'}
+          <Text style={[styles.headerTitle, { color: colors.text }]}>새 게시글</Text>
+          <TouchableOpacity 
+            onPress={handleSubmit} 
+            disabled={loading} 
+            style={[styles.submitBtn, { backgroundColor: colors.primary }]}
+          >
+            <Text style={styles.submitText}>
+              {loading ? '등록 중' : '발행'}
             </Text>
           </TouchableOpacity>
         </View>
 
-        <ScrollView 
+        <KeyboardAvoidingView 
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
           style={styles.flex1}
-          contentContainerStyle={styles.form}
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="on-drag"
         >
-          <View style={[styles.inputCard, { backgroundColor: isDarkMode ? '#2D3748' : '#F7FAFC' }]}>
-            <Text style={[styles.inputLabel, { color: colors.primary }]}>제목</Text>
-            <TextInput
-              style={[styles.inputTitle, { color: colors.text, borderBottomColor: colors.border }]}
-              placeholder="게시글의 제목을 입력하세요"
-              placeholderTextColor={colors.textMuted}
-              value={title}
-              onChangeText={setTitle}
-              maxLength={50}
-            />
+          <ScrollView 
+            ref={scrollViewRef}
+            style={styles.flex1}
+            contentContainerStyle={[styles.form, { paddingBottom: 150 }]}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
+          >
+            <View style={styles.editorContainer}>
+              <TextInput
+                style={[styles.inputTitle, { color: colors.text }]}
+                placeholder="제목을 입력하세요"
+                placeholderTextColor={colors.textMuted}
+                value={title}
+                onChangeText={setTitle}
+                maxLength={50}
+                returnKeyType="next"
+              />
 
-            {profile?.user_type === '관리자' && (
-              <View style={[styles.noticeToggle, { borderBottomColor: colors.border }]}>
-                 <Text style={[styles.noticeText, { color: colors.textSecondary }]}>중요 공지사항으로 등록</Text>
-                 <TouchableOpacity 
-                   onPress={() => setIsNotice(!isNotice)} 
-                   style={[styles.switch, { backgroundColor: isNotice ? colors.primary : colors.border }]}
-                 >
-                   <View style={[styles.switchHandle, { transform: [{ translateX: isNotice ? 20 : 0 }] }]} />
-                 </TouchableOpacity>
-              </View>
-            )}
-
-            <Text style={[styles.inputLabel, { color: colors.primary, marginTop: 12 }]}>내용</Text>
-            <TextInput
-              style={[styles.inputContent, { color: colors.textSecondary }]}
-              placeholder="내용을 자유롭게 작성해 주세요..."
-              placeholderTextColor={colors.textMuted}
-              value={content}
-              onChangeText={setContent}
-              multiline
-              textAlignVertical="top"
-            />
-          </View>
-          
-          <View style={[styles.imageSection, { borderTopColor: colors.border }]}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-              <TouchableOpacity style={[styles.imageBtn, { backgroundColor: colors.card }]} onPress={pickImage} disabled={imageUris.length >= 5}>
-                <ImageIcon size={20} color={imageUris.length >= 5 ? colors.textMuted : colors.primary} />
-                <Text style={[styles.imageBtnText, { color: imageUris.length >= 5 ? colors.textMuted : colors.text }]}>사진 첨부 ({imageUris.length}/5)</Text>
-              </TouchableOpacity>
-              {imageUris.length > 0 && (
-                <Text style={{ fontSize: 12, color: colors.textMuted }}>좌우로 밀어서 확인</Text>
+              {profile?.user_type === '관리자' && (
+                <View style={[styles.noticeToggle, { backgroundColor: isDarkMode ? '#2D3748' : '#F7FAFC' }]}>
+                   <View>
+                     <Text style={[styles.noticeText, { color: colors.text }]}>공지사항</Text>
+                     <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 2 }}>리스트 상단에 고정됩니다</Text>
+                   </View>
+                   <TouchableOpacity 
+                     onPress={() => setIsNotice(!isNotice)} 
+                     style={[styles.switch, { backgroundColor: isNotice ? colors.primary : colors.border }]}
+                   >
+                     <View style={[styles.switchHandle, { transform: [{ translateX: isNotice ? 20 : 0 }] }]} />
+                   </TouchableOpacity>
+                </View>
               )}
+
+              <TextInput
+                style={[styles.inputContent, { color: colors.textSecondary }]}
+                placeholder="어떤 이야기를 들려주고 싶으신가요?"
+                placeholderTextColor={colors.textMuted}
+                value={content}
+                onChangeText={setContent}
+                multiline
+                textAlignVertical="top"
+                onContentSizeChange={() => {
+                  scrollViewRef.current?.scrollToEnd({ animated: true });
+                }}
+              />
             </View>
             
-            {imageUris.length > 0 && (
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.imageScroll}>
-                {imageUris.map((uri, index) => (
-                  <View key={index} style={styles.imagePreviewContainer}>
-                    <Image source={{ uri }} style={styles.imagePreview} resizeMode="cover" />
-                    <TouchableOpacity 
-                      style={[styles.removeImageBtn, { backgroundColor: isDarkMode ? '#4A5568' : '#1A202C' }]} 
-                      onPress={() => {
-                        setImageUris(prev => prev.filter((_, i) => i !== index));
-                        setImageBase64s(prev => prev.filter((_, i) => i !== index));
-                      }}
-                    >
-                      <X size={14} color="#FFF" />
-                    </TouchableOpacity>
-                  </View>
-                ))}
-              </ScrollView>
-            )}
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+            <View style={styles.attachmentSection}>
+              <View style={styles.attachmentHeader}>
+                <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>사진 첨부</Text>
+                <Text style={{ fontSize: 13, color: colors.textMuted }}>{imageUris.length} / 5</Text>
+              </View>
+
+              <View style={styles.imageActionRow}>
+                <TouchableOpacity 
+                  style={[styles.addButton, { backgroundColor: isDarkMode ? '#2D3748' : '#F7FAFC', borderColor: colors.border }]} 
+                  onPress={pickImage} 
+                  disabled={imageUris.length >= 5}
+                >
+                  <ImageIcon size={22} color={imageUris.length >= 5 ? colors.textMuted : colors.primary} />
+                  <Text style={[styles.addButtonText, { color: colors.textSecondary }]}>사진 추가</Text>
+                </TouchableOpacity>
+
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.imageGallery}>
+                  {imageUris.map((uri, index) => (
+                    <View key={index} style={styles.imageWrapper}>
+                      <Image source={{ uri }} style={styles.imagePreview} />
+                      <TouchableOpacity 
+                        style={styles.deleteBadge} 
+                        onPress={() => {
+                          setImageUris(prev => prev.filter((_, i) => i !== index));
+                          setImageBase64s(prev => prev.filter((_, i) => i !== index));
+                        }}
+                      >
+                        <X size={12} color="#FFF" />
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </ScrollView>
+              </View>
+            </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -221,51 +235,92 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   flex1: { flex: 1 },
   header: { 
-    height: 64,
+    height: 60,
     flexDirection: 'row', 
     justifyContent: 'space-between', 
     alignItems: 'center', 
-    paddingHorizontal: 16, 
-    borderBottomWidth: 1 
+    paddingHorizontal: 20,
+    borderBottomWidth: 0.5 
   },
   closeBtn: { padding: 4 },
-  headerTitle: { fontSize: 18, fontWeight: '700' },
-  submitBtn: { paddingHorizontal: 20, paddingVertical: 10, borderRadius: 24, elevation: 2, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 4, shadowOffset: { width: 0, height: 2 } },
-  submitText: { color: '#fff', fontWeight: 'bold', fontSize: 14 },
-  disabledText: { opacity: 0.7 },
-  form: { padding: 20 },
-  inputCard: { padding: 20, borderRadius: 20, marginBottom: 20 },
-  inputLabel: { fontSize: 12, fontWeight: '800', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 },
-  inputTitle: { fontSize: 20, fontWeight: 'bold', marginBottom: 16, borderBottomWidth: 1, paddingBottom: 12 },
+  headerTitle: { fontSize: 17, fontWeight: '700', letterSpacing: -0.5 },
+  submitBtn: { 
+    paddingHorizontal: 18, 
+    paddingVertical: 8, 
+    borderRadius: 20,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 }
+  },
+  submitText: { color: '#fff', fontWeight: '800', fontSize: 14 },
+  
+  form: { paddingHorizontal: 20, paddingTop: 30 },
+  editorContainer: { minHeight: 450 },
+  inputTitle: { 
+    fontSize: 24, 
+    fontWeight: '800', 
+    marginBottom: 24, 
+    letterSpacing: -0.8,
+    paddingVertical: 8
+  },
+  inputContent: { 
+    fontSize: 17, 
+    lineHeight: 28, 
+    textAlignVertical: 'top',
+    minHeight: 300,
+    letterSpacing: -0.2
+  },
+
   noticeToggle: { 
     flexDirection: 'row', 
     alignItems: 'center', 
     justifyContent: 'space-between', 
-    paddingVertical: 14, 
-    borderBottomWidth: 1,
-    marginBottom: 16
+    padding: 16, 
+    borderRadius: 16,
+    marginBottom: 32
   },
-  noticeText: { fontSize: 15, fontWeight: '600' },
+  noticeText: { fontSize: 15, fontWeight: '700' },
   switch: { width: 44, height: 24, borderRadius: 12, padding: 2, justifyContent: 'center' },
   switchHandle: { width: 20, height: 20, borderRadius: 10, backgroundColor: '#fff' },
-  inputContent: { fontSize: 16, minHeight: 400, lineHeight: 24, textAlignVertical: 'top' },
-  imageSection: { marginTop: 8, borderTopWidth: 1, paddingTop: 24 },
-  imageBtn: { 
+
+  attachmentSection: { marginTop: 40 },
+  attachmentHeader: { 
     flexDirection: 'row', 
-    alignItems: 'center', 
-    paddingHorizontal: 18, 
-    paddingVertical: 12, 
-    borderRadius: 12, 
-    alignSelf: 'flex-start',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 5,
-    shadowOffset: { width: 0, height: 2 }
+    justifyContent: 'space-between', 
+    alignItems: 'baseline',
+    marginBottom: 16,
+    paddingHorizontal: 4
   },
-  imageBtnText: { marginLeft: 8, fontWeight: '700', fontSize: 14 },
-  imageScroll: { paddingRight: 20, gap: 14, paddingVertical: 12 },
-  imagePreviewContainer: { position: 'relative', width: 110, height: 110 },
-  imagePreview: { width: 110, height: 110, borderRadius: 16 },
-  removeImageBtn: { position: 'absolute', top: -8, right: -8, borderRadius: 14, padding: 6, elevation: 6, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, zIndex: 10 }
+  sectionTitle: { fontSize: 16, fontWeight: '800', letterSpacing: -0.4 },
+  
+  imageActionRow: { flexDirection: 'row', alignItems: 'center' },
+  addButton: { 
+    width: 90, 
+    height: 90, 
+    borderRadius: 20, 
+    borderWidth: 1, 
+    borderStyle: 'dashed',
+    justifyContent: 'center', 
+    alignItems: 'center',
+    marginRight: 12
+  },
+  addButtonText: { fontSize: 12, fontWeight: '700', marginTop: 6 },
+  
+  imageGallery: { paddingRight: 40 },
+  imageWrapper: { position: 'relative', marginRight: 12 },
+  imagePreview: { width: 90, height: 90, borderRadius: 20 },
+  deleteBadge: { 
+    position: 'absolute', 
+    top: -6, 
+    right: -6, 
+    backgroundColor: '#FF4B4B', 
+    borderRadius: 12, 
+    padding: 4,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 3
+  }
 });

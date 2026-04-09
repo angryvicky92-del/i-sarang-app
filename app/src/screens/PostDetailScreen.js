@@ -305,32 +305,32 @@ export default function PostDetailScreen({ route, navigation }) {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-      <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+      <View style={[styles.header, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <ChevronLeft size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.text }]}>
-          {isEditingPost ? '게시글 수정' : isEditingCommentId ? '댓글 수정' : '게시글 상세'}
+          {isEditingPost ? '글 수정' : '상세보기'}
         </Text>
         <View style={styles.headerRight}>
           {(profile?.id === post?.user_id || profile?.user_type === '관리자') && (
-            <View style={{ flexDirection: 'row' }}>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
               {!isEditingPost ? (
                 <>
                   <TouchableOpacity onPress={startEditingPost} style={styles.headerActionBtn}>
-                    <Edit2 size={20} color={colors.textSecondary} />
+                    <Edit2 size={18} color={colors.textSecondary} />
                   </TouchableOpacity>
                   <TouchableOpacity onPress={handleDeletePost} style={styles.headerActionBtn}>
-                    <Trash2 size={20} color="#EF4444" />
+                    <Trash2 size={18} color="#FF4B4B" />
                   </TouchableOpacity>
                 </>
               ) : (
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <TouchableOpacity onPress={handleUpdatePost} disabled={submitting} style={[styles.headerActionBtn, { marginRight: 8 }]}>
-                    <Check size={20} color={colors.primary} />
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                  <TouchableOpacity onPress={() => setIsEditingPost(false)} style={styles.cancelLink}>
+                    <Text style={{ color: colors.textMuted, fontSize: 14, fontWeight: '600' }}>취소</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity onPress={() => setIsEditingPost(false)} style={styles.headerActionBtn}>
-                    <X size={20} color={colors.textSecondary} />
+                  <TouchableOpacity onPress={handleUpdatePost} disabled={submitting} style={[styles.saveBtnSmall, { backgroundColor: colors.primary }]}>
+                    <Check size={18} color="#fff" />
                   </TouchableOpacity>
                 </View>
               )}
@@ -340,238 +340,200 @@ export default function PostDetailScreen({ route, navigation }) {
       </View>
 
       <KeyboardAvoidingView 
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined} 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
         style={{ flex: 1 }}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 60 : 0}
       >
         <ScrollView 
           ref={scrollViewRef}
-          style={styles.content} 
-          contentContainerStyle={{ flexGrow: 1, paddingBottom: 20 }}
+          style={styles.flex1} 
+          contentContainerStyle={{ flexGrow: 1, paddingBottom: 100 }}
           keyboardShouldPersistTaps="handled"
         >
-          <View style={styles.metaRow}>
-            {post.profiles?.user_type === '관리자' ? (
-              <View style={[styles.badge, { backgroundColor: colors.primary, borderColor: colors.primary }]}>
-                <Text style={[styles.badgeText, { color: '#fff' }]}>관리자</Text>
+          <View style={styles.mainContent}>
+            {isEditingPost ? (
+              <View style={styles.editForm}>
+                <TextInput
+                  style={[styles.editTitleInput, { color: colors.text }]}
+                  value={editTitle}
+                  onChangeText={setEditTitle}
+                  placeholder="제목"
+                  placeholderTextColor={colors.textMuted}
+                />
+                <TextInput
+                  style={[styles.editContentInput, { color: colors.textSecondary }]}
+                  value={editContent}
+                  onChangeText={setEditContent}
+                  placeholder="내용을 입력하세요"
+                  placeholderTextColor={colors.textMuted}
+                  multiline
+                  onContentSizeChange={() => {
+                    scrollViewRef.current?.scrollToEnd({ animated: true });
+                  }}
+                />
               </View>
-            ) : post.type && (
-              <View style={[styles.badge, { 
-                backgroundColor: post.type === '선생님' 
-                  ? (isDarkMode ? '#4A6CF720' : '#EEF2FF') 
-                  : (isDarkMode ? `${colors.primary}20` : `${colors.primary}10`),
-                borderColor: post.type === '선생님' ? '#4A6CF740' : `${colors.primary}40`,
-              }]}>
-                <Text style={[styles.badgeText, { 
-                  color: post.type === '선생님' ? '#4A6CF7' : colors.primary 
-                }]}>
-                  {post.type}
-                </Text>
-              </View>
-            )}
-            <View style={styles.authorBadge}>
-              <User size={13} color={colors.textSecondary} />
-              <TouchableOpacity onPress={() => handleNicknameClick(post.user_id, post.author, post.type)} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                <Text style={[styles.authorText, { color: colors.textSecondary }]}>{post.author}</Text>
-              </TouchableOpacity>
-            </View>
-            <View style={styles.dateBadge}>
-              <Calendar size={13} color={colors.textSecondary} />
-              <Text style={[styles.authorText, { color: colors.textSecondary }]}>{new Date(post.created_at).toLocaleDateString()}</Text>
-            </View>
-            <View style={styles.viewBadge}>
-              <Eye size={13} color={colors.textSecondary} />
-              <Text style={[styles.authorText, { color: colors.textSecondary }]}>{post.views || 0}</Text>
-            </View>
-          </View>
+            ) : (
+              <>
+                <View style={styles.metaInfo}>
+                  {post.profiles?.user_type === '관리자' ? (
+                    <View style={[styles.adminChip, { backgroundColor: colors.primary }]}>
+                      <Text style={styles.chipText}>관리자</Text>
+                    </View>
+                  ) : post.type && (
+                    <View style={[styles.typeChip, { backgroundColor: post.type === '선생님' ? '#EEF2FF' : '#F0FDF4' }]}>
+                      <Text style={[styles.typeChipText, { color: post.type === '선생님' ? '#4A6CF7' : '#16A34A' }]}>{post.type}</Text>
+                    </View>
+                  )}
+                  <TouchableOpacity onPress={() => handleNicknameClick(post.user_id, post.author, post.type)} style={styles.authorInfo}>
+                    <Text style={[styles.authorName, { color: colors.text }]}>{post.author}</Text>
+                  </TouchableOpacity>
+                  <Text style={[styles.metaTime, { color: colors.textMuted }]}>• {new Date(post.created_at).toLocaleDateString()}</Text>
+                  <View style={styles.viewCount}>
+                    <Eye size={12} color={colors.textMuted} />
+                    <Text style={{ fontSize: 12, color: colors.textMuted, marginLeft: 2 }}>{post.views || 0}</Text>
+                  </View>
+                </View>
 
-          {isEditingPost ? (
-            <View style={[styles.editPostContainer, { backgroundColor: isDarkMode ? '#2D3748' : '#F7FAFC', borderColor: colors.primary, borderWidth: 1 }]}>
-              <Text style={[styles.editLabel, { color: colors.primary }]}>게시글 제목 수정</Text>
-              <TextInput
-                style={[styles.editTitleInput, { color: colors.text, borderBottomColor: colors.border }]}
-                value={editTitle}
-                onChangeText={setEditTitle}
-                placeholder="제목"
-                placeholderTextColor={colors.textMuted}
-              />
-              <Text style={[styles.editLabel, { color: colors.primary, marginTop: 16 }]}>게시글 내용 수정</Text>
-              <TextInput
-                style={[styles.editContentInput, { color: colors.textSecondary, borderBottomColor: colors.border }]}
-                value={editContent}
-                onChangeText={setEditContent}
-                placeholder="본문 내용을 입력하세요"
-                placeholderTextColor={colors.textMuted}
-                multiline
-              />
-              <TouchableOpacity style={[styles.saveBtn, { backgroundColor: colors.primary }]} onPress={handleUpdatePost} disabled={submitting}>
-                {submitting ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.saveBtnText}>수정 완료</Text>}
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <>
-              <Text style={[styles.title, { color: colors.text }]}>{post.title}</Text>
-              
-              {post.image_urls && post.image_urls.length > 0 ? (
-                post.image_urls.map((url, idx) => (
+                <Text style={[styles.postTitle, { color: colors.text }]}>{post.title}</Text>
+                
+                {post.image_urls && post.image_urls.length > 0 ? (
+                  post.image_urls.map((url, idx) => (
+                    <Image 
+                      key={idx}
+                      source={{ uri: url }} 
+                      style={[styles.postImage, { aspectRatio: imageAspectRatios[url] || 1.5 }]} 
+                      resizeMode="cover" 
+                    />
+                  ))
+                ) : post.image_url ? (
                   <Image 
-                    key={idx}
-                    source={{ uri: url }} 
-                    style={[styles.image, { aspectRatio: imageAspectRatios[url] || 1, height: undefined, backgroundColor: colors.card, marginBottom: 12 }]} 
+                    source={{ uri: post.image_url }} 
+                    style={[styles.postImage, { aspectRatio: imageAspectRatios[post.image_url] || 1.5 }]} 
                     resizeMode="cover" 
                   />
-                ))
-              ) : post.image_url ? (
-                <Image 
-                  source={{ uri: post.image_url }} 
-                  style={[styles.image, { aspectRatio: imageAspectRatios[post.image_url] || 1, height: undefined, backgroundColor: colors.card }]} 
-                  resizeMode="cover" 
-                />
-              ) : null}
+                ) : null}
 
-              <Text style={[styles.bodyText, { color: colors.textSecondary }]}>{post.content}</Text>
-            </>
-          )}
-          
-          <View style={styles.postEngagement}>
-            <EngagementButtons 
-              targetType="post" 
-              targetId={post.id} 
-              item={post} 
-              userVote={userPostVote} 
-              userId={profile?.id}
-              onUpdate={(updatedData) => {
-                setPost(prev => ({ ...prev, ...updatedData }));
-                setUserPostVote(updatedData.userVote);
-              }}
-            />
-          </View>
-
-          <AdBanner />
-          
-          <View style={styles.commentSection}>
-            <View style={[styles.divider, { backgroundColor: colors.border }]} />
-            <View style={styles.sectionHeaderRow}>
-              <MessageSquare size={18} color={colors.text} />
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>댓글 ({comments.length})</Text>
+                <Text style={[styles.postBody, { color: colors.textSecondary }]}>{post.content}</Text>
+              </>
+            )}
+            
+            <View style={styles.interactionArea}>
+              <EngagementButtons 
+                targetType="post" 
+                targetId={post.id} 
+                item={post} 
+                userVote={userPostVote} 
+                userId={profile?.id}
+                onUpdate={(updatedData) => {
+                  setPost(prev => ({ ...prev, ...updatedData }));
+                  setUserPostVote(updatedData.userVote);
+                }}
+              />
             </View>
 
-            {comments.map((comment) => (
-              <View key={comment.id} style={[
-                styles.commentItem, 
-                { backgroundColor: colors.card },
-                isEditingCommentId === comment.id && { borderColor: colors.primary, borderWidth: 2, backgroundColor: isDarkMode ? '#1A202C' : '#F0F7FF' }
-              ]}>
-                <View style={styles.commentMeta}>
-                  <View style={styles.commentMetaLeft}>
-                    <TouchableOpacity onPress={() => handleNicknameClick(comment.author_id, comment.author_nickname, null)} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                      {comment.profiles?.user_type === '관리자' && (
-                        <View style={[styles.adminBadgeSmall, { backgroundColor: colors.primary }]}>
-                          <Text style={styles.adminBadgeTextSmall}>관리자</Text>
+            <AdBanner />
+            
+            <View style={styles.commentsWrap}>
+              <View style={styles.commentsHeader}>
+                <Text style={[styles.commentsTitle, { color: colors.text }]}>댓글 {comments.length}</Text>
+              </View>
+
+              {comments.map((comment) => (
+                <View key={comment.id} style={styles.commentRow}>
+                  <View style={styles.commentContainer}>
+                    <View style={styles.commentTop}>
+                      <TouchableOpacity onPress={() => handleNicknameClick(comment.author_id, comment.author_nickname, null)} style={styles.commenter}>
+                        {comment.profiles?.user_type === '관리자' && <View style={[styles.adminDot, { backgroundColor: colors.primary }]} />}
+                        <Text style={[styles.commenterName, { color: colors.text }]}>{comment.author_nickname}</Text>
+                      </TouchableOpacity>
+                      <Text style={[styles.commentTime, { color: colors.textMuted }]}>{new Date(comment.created_at).toLocaleDateString()}</Text>
+                      
+                      {(profile?.id === comment.author_id || profile?.user_type === '관리자') && (
+                        <View style={styles.commentActions}>
+                          <TouchableOpacity onPress={() => startEditingComment(comment)} style={styles.tinyActionBtn}>
+                            <Edit2 size={14} color={colors.textMuted} />
+                          </TouchableOpacity>
+                          <TouchableOpacity onPress={() => handleDeleteComment(comment.id)} style={styles.tinyActionBtn}>
+                            <Trash2 size={14} color={colors.textMuted} />
+                          </TouchableOpacity>
                         </View>
                       )}
-                      <Text style={[styles.commentAuthor, { color: colors.text }]}>{comment.author_nickname}</Text>
-                    </TouchableOpacity>
-                    <Text style={[styles.commentDate, { color: colors.textMuted }]}>{new Date(comment.created_at).toLocaleDateString()}</Text>
-                  </View>
-                  {(profile?.id === comment.author_id || profile?.user_type === '관리자') && (
-                    <View style={{ flexDirection: 'row', gap: 10 }}>
-                      {!isEditingCommentId || isEditingCommentId !== comment.id ? (
-                        <>
-                          <TouchableOpacity onPress={() => startEditingComment(comment)}>
-                            <Edit2 size={16} color={colors.textMuted} />
-                          </TouchableOpacity>
-                          <TouchableOpacity onPress={() => handleDeleteComment(comment.id)}>
-                            <Trash2 size={16} color={colors.textMuted} />
-                          </TouchableOpacity>
-                        </>
-                      ) : (
-                        <TouchableOpacity onPress={() => setIsEditingCommentId(null)}>
-                          <X size={16} color={colors.textMuted} />
-                        </TouchableOpacity>
-                      )}
                     </View>
-                  )}
-                </View>
-                
-                {isEditingCommentId === comment.id ? (
-                  <View style={styles.editCommentContainer}>
-                    <Text style={[styles.editLabelSmall, { color: colors.primary }]}>댓글 내용 수정</Text>
-                    <TextInput
-                      style={[styles.editCommentInput, { backgroundColor: colors.background, color: colors.text, borderColor: colors.border }]}
-                      value={editCommentContent}
-                      onChangeText={setEditCommentContent}
-                      multiline
-                      autoFocus
-                    />
-                    <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 8, marginTop: 12 }}>
-                      <TouchableOpacity 
-                        style={[styles.commentCancelBtn, { backgroundColor: colors.border }]} 
-                        onPress={() => setIsEditingCommentId(null)}
-                      >
-                        <Text style={[styles.commentCancelText, { color: colors.text }]}>취소</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity 
-                        style={[styles.commentSaveBtn, { backgroundColor: colors.primary }]} 
-                        onPress={() => handleUpdateComment(comment.id)}
-                      >
-                        <Text style={styles.commentSaveText}>수정 완료</Text>
-                      </TouchableOpacity>
+                    
+                    {isEditingCommentId === comment.id ? (
+                      <View style={styles.inlineEditWrap}>
+                        <TextInput
+                          style={[styles.inlineEditInput, { color: colors.text, borderLeftColor: colors.primary }]}
+                          value={editCommentContent}
+                          onChangeText={setEditCommentContent}
+                          multiline
+                          autoFocus
+                        />
+                        <View style={styles.inlineEditActions}>
+                          <TouchableOpacity onPress={() => setIsEditingCommentId(null)}>
+                            <Text style={{ color: colors.textMuted, fontSize: 13 }}>취소</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity onPress={() => handleUpdateComment(comment.id)} style={[styles.smallActionBtn, { backgroundColor: colors.primary }]}>
+                            <Text style={{ color: '#fff', fontSize: 13, fontWeight: '700' }}>수정</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    ) : (
+                      <Text style={[styles.commentText, { color: colors.textSecondary }]}>{comment.content}</Text>
+                    )}
+                    
+                    <View style={styles.commentBottom}>
+                      <EngagementButtons 
+                        targetType="comment" 
+                        targetId={comment.id} 
+                        item={comment} 
+                        userVote={userCommentVotes[comment.id] || 0} 
+                        userId={profile?.id}
+                        onUpdate={(updatedData) => {
+                          setComments(prev => prev.map(c => c.id === comment.id ? { ...c, ...updatedData } : c));
+                          setUserCommentVotes(prev => ({ ...prev, [comment.id]: updatedData.userVote }));
+                        }}
+                      />
                     </View>
                   </View>
-                ) : (
-                  <Text style={[styles.commentContent, { color: colors.textSecondary }]}>{comment.content}</Text>
-                )}
-                <View style={styles.commentEngagement}>
-                  <EngagementButtons 
-                    targetType="comment" 
-                    targetId={comment.id} 
-                    item={comment} 
-                    userVote={userCommentVotes[comment.id] || 0} 
-                    userId={profile?.id}
-                    onUpdate={(updatedData) => {
-                      setComments(prev => prev.map(c => c.id === comment.id ? { ...c, ...updatedData } : c));
-                      setUserCommentVotes(prev => ({ ...prev, [comment.id]: updatedData.userVote }));
-                    }}
-                  />
                 </View>
-              </View>
-            ))}
+              ))}
 
-            {comments.length === 0 && (
-              <Text style={[styles.emptyComments, { color: colors.textMuted }]}>아직 댓글이 없습니다. 첫 댓글을 남겨보세요!</Text>
-            )}
-
-            {!isEditingPost && (
-              <View style={[styles.inlineInputContainer, { backgroundColor: isDarkMode ? '#1A202C' : '#F7FAFC' }]}>
-                <Text style={[styles.editLabelSmall, { color: colors.primary, marginBottom: 12 }]}>새 댓글 작성</Text>
-                <TextInput
-                  style={[styles.input, { backgroundColor: colors.background, color: colors.text, borderColor: colors.border }]}
-                  placeholder="댓글을 입력하세요..."
-                  placeholderTextColor={colors.textMuted}
-                  value={newComment}
-                  onChangeText={setNewComment}
-                  multiline
-                  onFocus={onInputFocus}
-                />
-                <TouchableOpacity 
-                  style={[styles.inlineSendBtn, { backgroundColor: colors.primary }, !newComment.trim() && { opacity: 0.5 }]} 
-                  onPress={handleAddComment}
-                  disabled={submitting || !newComment.trim()}
-                >
-                  {submitting ? (
-                    <ActivityIndicator size="small" color="#fff" />
-                  ) : (
-                    <>
-                      <Text style={styles.inlineSendText}>댓글 등록</Text>
-                      <Send size={18} color="#fff" />
-                    </>
-                  )}
-                </TouchableOpacity>
-              </View>
-            )}
+              {comments.length === 0 && (
+                <View style={styles.emptyWrap}>
+                  <MessageSquare size={40} color={colors.border} />
+                  <Text style={[styles.emptyText, { color: colors.textMuted }]}>첫 댓글의 주인공이 되어보세요</Text>
+                </View>
+              )}
+            </View>
           </View>
         </ScrollView>
+
+        {/* Sticky Bottom Bar */}
+        {!isEditingPost && (
+          <View style={[styles.stickyBar, { borderTopColor: colors.border, backgroundColor: isDarkMode ? '#1A202C' : '#FFFFFF', paddingBottom: insets.bottom + 10 }]}>
+            <TextInput
+              style={[styles.stickyInput, { backgroundColor: isDarkMode ? '#2D3748' : '#F7FAFC', color: colors.text }]}
+              placeholder="댓글을 남겨주세요..."
+              placeholderTextColor={colors.textMuted}
+              value={newComment}
+              onChangeText={setNewComment}
+              multiline
+              maxHeight={100}
+            />
+            <TouchableOpacity 
+              onPress={handleAddComment}
+              disabled={submitting || !newComment.trim()}
+              style={[styles.sendCircle, { backgroundColor: newComment.trim() ? colors.primary : colors.border }]}
+            >
+              {submitting ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Send size={18} color="#fff" />
+              )}
+            </TouchableOpacity>
+          </View>
+        )}
       </KeyboardAvoidingView>
 
       <UserActionModal
@@ -587,139 +549,95 @@ export default function PostDetailScreen({ route, navigation }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  flex1: { flex: 1 },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   header: { 
-    height: 64, 
+    height: 60, 
     flexDirection: 'row', 
     alignItems: 'center', 
     justifyContent: 'space-between', 
     paddingHorizontal: 16, 
-    borderBottomWidth: 1 
+    borderBottomWidth: 0.5 
   },
   backBtn: { padding: 4 },
-  headerTitle: { fontSize: 18, fontWeight: '700' },
-  headerRight: { width: 88, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 4 },
+  headerTitle: { fontSize: 16, fontWeight: '800', letterSpacing: -0.5 },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   headerActionBtn: { padding: 8 },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  content: { padding: 24 },
-  
-  editPostContainer: { 
-    marginBottom: 32, 
-    padding: 20, 
-    borderRadius: 20, 
-    borderStyle: 'dashed'
-  },
-  editLabel: { fontSize: 12, fontWeight: '800', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1 },
-  editLabelSmall: { fontSize: 11, fontWeight: '800', marginBottom: 10, textTransform: 'uppercase' },
-  editTitleInput: { fontSize: 22, fontWeight: 'bold', borderBottomWidth: 1, paddingVertical: 12, marginBottom: 12 },
-  editContentInput: { fontSize: 17, paddingVertical: 12, marginBottom: 20, minHeight: 250, textAlignVertical: 'top', lineHeight: 26 },
-  saveBtn: { 
-    padding: 16, 
-    borderRadius: 14, 
-    alignItems: 'center', 
-    marginTop: 12,
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 3 }
-  },
-  saveBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
-  
-  editCommentContainer: { marginTop: 16 },
-  editCommentInput: { 
-    borderWidth: 1, 
-    borderRadius: 14, 
-    padding: 14, 
-    fontSize: 16, 
-    minHeight: 120, 
-    textAlignVertical: 'top', 
-    lineHeight: 24 
-  },
-  commentSaveBtn: { paddingHorizontal: 20, paddingVertical: 11, borderRadius: 10 },
-  commentCancelBtn: { paddingHorizontal: 20, paddingVertical: 11, borderRadius: 10 },
-  commentSaveText: { color: '#fff', fontSize: 14, fontWeight: 'bold' },
-  commentCancelText: { fontSize: 14, fontWeight: '600' },
+  cancelLink: { marginRight: 8 },
+  saveBtnSmall: { width: 34, height: 34, borderRadius: 17, justifyContent: 'center', alignItems: 'center' },
 
-  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 24, flexWrap: 'wrap' },
-  authorBadge: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  dateBadge: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  viewBadge: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, borderWidth: 1 },
-  badgeText: { fontSize: 11, fontWeight: '800' },
-  authorText: { fontSize: 14, fontWeight: '600' },
-  title: { 
-    fontSize: 26, 
-    fontWeight: '800', 
-    marginBottom: 28, 
-    lineHeight: 36, 
-    letterSpacing: -0.6 
-  },
-  image: { width: '100%', borderRadius: 20, marginBottom: 28 },
-  bodyText: { fontSize: 18, lineHeight: 30, letterSpacing: 0.3 },
+  mainContent: { paddingHorizontal: 20, paddingTop: 20 },
+  metaInfo: { flexDirection: 'row', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap' },
+  adminChip: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, marginRight: 8 },
+  typeChip: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, marginRight: 8 },
+  chipText: { color: '#fff', fontSize: 11, fontWeight: '800' },
+  typeChipText: { fontSize: 11, fontWeight: '800' },
+  authorInfo: { marginRight: 6 },
+  authorName: { fontSize: 14, fontWeight: '700' },
+  metaTime: { fontSize: 12, marginRight: 8 },
+  viewCount: { flexDirection: 'row', alignItems: 'center' },
+
+  postTitle: { fontSize: 24, fontWeight: '800', marginBottom: 24, lineHeight: 32, letterSpacing: -0.8 },
+  postImage: { width: '100%', borderRadius: 16, marginBottom: 24 },
+  postBody: { fontSize: 17, lineHeight: 28, letterSpacing: -0.2, marginBottom: 40 },
+
+  interactionArea: { borderTopWidth: 0.5, borderTopColor: '#EEE', paddingTop: 20, marginBottom: 40, flexDirection: 'row' },
   
-  commentSection: { marginTop: 48, paddingBottom: 120 },
-  divider: { height: 1.5, marginBottom: 28 },
-  sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 28 },
-  sectionTitle: { fontSize: 20, fontWeight: '800' },
-  commentItem: { 
-    marginBottom: 16, 
-    padding: 20, 
-    borderRadius: 20, 
-    borderWidth: 1, 
-    borderColor: 'transparent',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 }
-  },
-  commentMeta: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
-  commentMetaLeft: { flexDirection: 'row', gap: 12, alignItems: 'center' },
-  commentAuthor: { fontWeight: '700', fontSize: 15 },
-  commentDate: { fontSize: 12 },
-  commentContent: { fontSize: 16, lineHeight: 24 },
-  emptyComments: { textAlign: 'center', marginTop: 48, fontSize: 16 },
-  postEngagement: { marginTop: 48, marginBottom: 16, flexDirection: 'row', justifyContent: 'center' },
-  commentEngagement: { marginTop: 18, alignItems: 'flex-end' },
+  commentsWrap: { marginTop: 20 },
+  commentsHeader: { marginBottom: 24 },
+  commentsTitle: { fontSize: 18, fontWeight: '800' },
   
-  input: { 
-    flex: 1, 
-    borderRadius: 26, 
-    paddingHorizontal: 20, 
-    paddingVertical: 14, 
-    maxHeight: 120, 
-    fontSize: 16,
-    fontWeight: '500'
-  },
-  inlineInputContainer: {
-    marginTop: 24,
-    padding: 24,
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: 'transparent',
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 }
-  },
-  inlineSendBtn: {
+  commentRow: { marginBottom: 24 },
+  commentContainer: { paddingLeft: 2 },
+  commentTop: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
+  commenter: { flexDirection: 'row', alignItems: 'center', marginRight: 8 },
+  adminDot: { width: 6, height: 6, borderRadius: 3, marginRight: 4 },
+  commenterName: { fontSize: 14, fontWeight: '700' },
+  commentTime: { fontSize: 12 },
+  commentActions: { marginLeft: 'auto', flexDirection: 'row', gap: 12 },
+  tinyActionBtn: { padding: 2 },
+  
+  commentText: { fontSize: 15, lineHeight: 22, letterSpacing: -0.2, marginBottom: 12 },
+  commentBottom: { alignItems: 'flex-start' },
+
+  inlineEditWrap: { marginVertical: 12 },
+  inlineEditInput: { fontSize: 15, lineHeight: 22, borderLeftWidth: 3, paddingLeft: 12, paddingVertical: 4 },
+  inlineEditActions: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 16, marginTop: 12 },
+  smallActionBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
+
+  emptyWrap: { alignItems: 'center', paddingVertical: 60, gap: 12 },
+  emptyText: { fontSize: 14, fontWeight: '500' },
+
+  editForm: { marginTop: 10 },
+  editTitleInput: { fontSize: 22, fontWeight: '800', borderBottomWidth: 1.5, borderBottomColor: '#EEE', paddingVertical: 12, marginBottom: 20 },
+  editContentInput: { fontSize: 17, lineHeight: 28, minHeight: 300, textAlignVertical: 'top' },
+
+  stickyBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 14,
-    borderRadius: 14,
-    marginTop: 16,
-    elevation: 2,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    borderTopWidth: 0.5,
+    elevation: 10,
     shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 }
+    shadowOpacity: 0.05,
+    shadowRadius: 5,
+    shadowOffset: { width: 0, height: -3 }
   },
-  inlineSendText: {
-    color: '#fff',
+  stickyInput: {
+    flex: 1,
+    borderRadius: 22,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
     fontSize: 15,
-    fontWeight: 'bold'
+    marginRight: 10,
+    minHeight: 40
+  },
+  sendCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center', 
+    alignItems: 'center'
   }
 });

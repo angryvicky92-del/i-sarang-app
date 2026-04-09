@@ -18,6 +18,7 @@
     "android": {
       "package": "com.uljipcheck.app",
       "versionCode": 2,
+      "softwareKeyboardLayoutMode": "adjustResize",
       "adaptiveIcon": {
         "backgroundColor": "#ffffff",
         "foregroundImage": "./assets/custom_icon.png"

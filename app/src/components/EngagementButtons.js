@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert } fr
 import { ThumbsUp, ThumbsDown } from 'lucide-react-native';
 import { toggleVote } from '../services/engagementService';
 import { useNavigation } from '@react-navigation/native';
+import { useTheme } from '../contexts/ThemeContext';
 
 /**
  * 추천/비추천 버튼 컴포넌트
@@ -16,6 +17,7 @@ import { useNavigation } from '@react-navigation/native';
 export default function EngagementButtons({ targetType, targetId, item, userVote, userId, onUpdate }) {
   const [loading, setLoading] = useState(false);
   const navigation = useNavigation();
+  const { colors, isDarkMode } = useTheme();
 
   // Note: review uses 'likes' instead of 'upvotes'
   const upCount = targetType === 'review' ? (item.likes || 0) : (item.upvotes || 0);
@@ -85,41 +87,46 @@ export default function EngagementButtons({ targetType, targetId, item, userVote
   return (
     <View style={styles.container}>
       <TouchableOpacity 
-        style={[styles.btn, userVote === 1 && styles.activeUp]} 
+        style={[
+          styles.btn, 
+          { backgroundColor: isDarkMode ? '#2D3748' : '#F1F5F9' },
+          userVote === 1 && { backgroundColor: colors.primary }
+        ]} 
         onPress={() => handleVote(1)}
         disabled={loading}
       >
-        <ThumbsUp size={16} color={userVote === 1 ? '#fff' : '#64748B'} fill={userVote === 1 ? '#fff' : 'transparent'} />
-        <Text style={[styles.countText, userVote === 1 && styles.activeText]}>{upCount}</Text>
+        <ThumbsUp size={14} color={userVote === 1 ? '#fff' : colors.textSecondary} fill={userVote === 1 ? '#fff' : 'transparent'} />
+        <Text style={[styles.countText, { color: colors.textSecondary }, userVote === 1 && styles.activeText]}>{upCount}</Text>
       </TouchableOpacity>
 
       <TouchableOpacity 
-        style={[styles.btn, userVote === -1 && styles.activeDown]} 
+        style={[
+          styles.btn, 
+          { backgroundColor: isDarkMode ? '#2D3748' : '#F1F5F9' },
+          userVote === -1 && { backgroundColor: '#FF4B4B' }
+        ]} 
         onPress={() => handleVote(-1)}
         disabled={loading}
       >
-        <ThumbsDown size={16} color={userVote === -1 ? '#fff' : '#64748B'} fill={userVote === -1 ? '#fff' : 'transparent'} />
-        <Text style={[styles.countText, userVote === -1 && styles.activeText]}>{downCount}</Text>
+        <ThumbsDown size={14} color={userVote === -1 ? '#fff' : colors.textSecondary} fill={userVote === -1 ? '#fff' : 'transparent'} />
+        <Text style={[styles.countText, { color: colors.textSecondary }, userVote === -1 && styles.activeText]}>{downCount}</Text>
       </TouchableOpacity>
 
-      {loading && <ActivityIndicator size="small" color="#75BA57" style={{ marginLeft: 8 }} />}
+      {loading && <ActivityIndicator size="small" color={colors.primary} style={{ marginLeft: 8 }} />}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  container: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   btn: { 
     flexDirection: 'row', 
     alignItems: 'center', 
-    gap: 6, 
-    paddingHorizontal: 10, 
-    paddingVertical: 6, 
-    borderRadius: 20, 
-    backgroundColor: '#F1F5F9' 
+    gap: 5, 
+    paddingHorizontal: 12, 
+    paddingVertical: 5, 
+    borderRadius: 14, 
   },
-  activeUp: { backgroundColor: '#75BA57' },
-  activeDown: { backgroundColor: '#F87171' },
-  countText: { fontSize: 13, fontWeight: 'bold', color: '#475569' },
+  countText: { fontSize: 13, fontWeight: '700' },
   activeText: { color: '#fff' }
 });
