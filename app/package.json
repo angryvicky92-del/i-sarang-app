@@ -34,6 +34,7 @@
     "expo-web-browser": "~15.0.10",
     "fast-xml-parser": "^5.5.9",
     "lucide-react-native": "^1.7.0",
+    "playwright": "^1.49.1",
     "react": "19.1.0",
     "react-native": "0.81.5",
     "react-native-chart-kit": "^6.12.0",

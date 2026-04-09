@@ -18,7 +18,6 @@
     "android": {
       "package": "com.uljipcheck.app",
       "versionCode": 2,
-      "permissions": [],
       "adaptiveIcon": {
         "backgroundColor": "#ffffff",
         "foregroundImage": "./assets/custom_icon.png"

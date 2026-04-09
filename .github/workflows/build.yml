@@ -1,6 +1,6 @@
 name: Build Android
 on:
-  workflow_dispatch:
+  workflow_dispatch: # Allows manual trigger from GitHub Actions tab
 
 jobs:
   build:
@@ -16,19 +16,6 @@ jobs:
           cache: 'npm'
           cache-path: app/package-lock.json
 
-      - name: Setup Java (JDK 17)
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'zulu'
-          java-version: '17'
-
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Set up Android Licenses
-        working-directory: app
-        run: yes | $ANDROID_HOME/tools/bin/sdkmanager --licenses || true
-
       - name: Setup Expo
         uses: expo/expo-github-action@v8
         with:
@@ -38,34 +25,16 @@ jobs:
 
       - name: Install dependencies
         working-directory: app
+        run: npm install
+
+      - name: Build Android AAB (Free Local Build)
+        working-directory: app
         run: |
-          # Ensuring root node_modules don't interfere
-          rm -rf ../node_modules
-          npm install
+          # Note: Using --local flag to bypass EAS cloud build limits
+          # This uses the GitHub Runner's resources to build the app
+          npx eas-cli build --platform android --profile production --local --non-interactive --output=./uljip_check_v2.aab
 
-      - name: Build Android AAB (Isolated App Path)
-        env:
-          NODE_OPTIONS: "--max-old-space-size=6144"
-          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx6144m -XX:MaxMetaspaceSize=1024m"
-          EXPO_DEBUG: "true"
-          DEBUG: "eas*"
-          EAS_BUILD_NO_EXPO_GO_WARNING: "true"
-        run: |
-          # Explicitly pointing to the app directory to avoid root-level interference
-          npx eas-cli build --platform android --profile production --local --non-interactive --clear-cache --path app --output=app/uljip_check_v2.aab
-
-      - name: Upload Logs on Failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-failure-logs
-          path: |
-            app/android/build/logs
-            app/**/*.log
-            /home/runner/.npm/_logs
-
-      - name: Upload Artifact on Success
-        if: success()
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: android-app-bundle
