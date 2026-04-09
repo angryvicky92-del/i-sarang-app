@@ -3,7 +3,7 @@
     "name": "얼집체크",
     "slug": "uljip-check",
     "scheme": "app",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/custom_icon.png",
     "userInterfaceStyle": "light",
@@ -17,7 +17,8 @@
     },
     "android": {
       "package": "com.uljipcheck.app",
-      "versionCode": 1,
+      "versionCode": 2,
+      "permissions": [],
       "adaptiveIcon": {
         "backgroundColor": "#ffffff",
         "foregroundImage": "./assets/custom_icon.png"
