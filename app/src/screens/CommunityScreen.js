@@ -75,7 +75,12 @@ export default function CommunityScreen({ navigation, route }) {
     setLoading(true);
 
     try {
-      let query = supabase.from('posts').select('*, post_comments(count)').order('created_at', { ascending: false }).limit(50);
+      let query = supabase
+        .from('posts')
+        .select('*, post_comments(count)')
+        .order('is_notice', { ascending: false })
+        .order('created_at', { ascending: false })
+        .limit(50);
       
       if (activeTab === 'teacher') query = query.eq('type', '선생님');
       if (activeTab === 'parent') query = query.eq('type', '학부모');
@@ -92,8 +97,31 @@ export default function CommunityScreen({ navigation, route }) {
       }
       
       const { data: posts, error } = await query;
-      if (error) throw error;
-      setData(posts || []);
+      if (error) {
+        // Fallback for if is_notice column doesn't exist yet
+        if (error.message.includes('column "is_notice" does not exist')) {
+          const { data: fallbackPosts, error: fallbackError } = await supabase
+            .from('posts')
+            .select('*, post_comments(count)')
+            .order('created_at', { ascending: false })
+            .limit(50);
+          if (fallbackError) throw fallbackError;
+          setData(fallbackPosts || []);
+        } else {
+          throw error;
+        }
+      } else {
+        // Fetch profiles for all authors to get user_type
+        const authorIds = [...new Set(posts.map(p => p.user_id))];
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('id, user_type')
+          .in('id', authorIds);
+        
+        const profileMap = (profiles || []).reduce((acc, p) => ({ ...acc, [p.id]: p }), {});
+        const postsWithProfiles = posts.map(p => ({ ...p, profiles: profileMap[p.user_id] }));
+        setData(postsWithProfiles || []);
+      }
     } catch (error) {
       console.error('Error fetching posts:', error.message);
     } finally {
@@ -143,7 +171,12 @@ export default function CommunityScreen({ navigation, route }) {
   const renderPostItem = ({ item, index }) => {
     const commentCount = item.post_comments?.[0]?.count || 0;
     const upvotes = item.upvotes || 0;
-    
+    const typeColors = {
+      bg: item.type === '선생님' ? (isDarkMode ? '#4A6CF720' : '#EEF2FF') : (isDarkMode ? `${colors.primary}20` : `${colors.primary}10`),
+      border: item.type === '선생님' ? '#4A6CF740' : `${colors.primary}40`,
+      text: item.type === '선생님' ? '#4A6CF7' : colors.primary
+    };
+
     return (
       <>
         <TouchableOpacity 
@@ -153,27 +186,24 @@ export default function CommunityScreen({ navigation, route }) {
           <View style={styles.cardMain}>
             <View style={styles.cardLeft}>
               <Text style={[styles.itemTitle, { color: colors.text }]} numberOfLines={1}>
+                {item.is_notice && <Text style={{ color: '#EF4444' }}>[공지] </Text>}
                 {item.title}
               </Text>
               
               <View style={styles.metaRowCompact}>
-                {item.type && (
-                  <View style={[styles.typeBadgeCompact, { 
-                    backgroundColor: item.type === '선생님' 
-                      ? (isDarkMode ? '#4A6CF720' : '#EEF2FF') 
-                      : (isDarkMode ? `${colors.primary}20` : `${colors.primary}10`),
-                    borderColor: item.type === '선생님' ? '#4A6CF740' : `${colors.primary}40`,
-                    borderWidth: 1
-                  }]}>
-                    <Text style={[styles.typeBadgeTextCompact, { 
-                      color: item.type === '선생님' ? '#4A6CF7' : colors.primary 
-                    }]}>
-                      {item.type}
-                    </Text>
+                {item.profiles?.user_type === '관리자' ? (
+                  <View style={[styles.typeBadgeCompact, { backgroundColor: colors.primary, borderColor: colors.primary }]}>
+                    <Text style={[styles.typeBadgeTextCompact, { color: '#fff' }]}>관리자</Text>
+                  </View>
+                ) : item.type && (
+                  <View style={[styles.typeBadgeCompact, { backgroundColor: typeColors.bg, borderColor: typeColors.border, borderWidth: 1 }]}>
+                    <Text style={[styles.typeBadgeTextCompact, { color: typeColors.text }]}>{item.type}</Text>
                   </View>
                 )}
                 <TouchableOpacity onPress={() => handleNicknameClick(item)}>
-                  <Text style={[styles.metaText, { color: colors.textMuted }]}>{item.author}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    <Text style={[styles.metaText, { color: colors.textMuted }]}>{item.author}</Text>
+                  </View>
                 </TouchableOpacity>
                 <View style={[styles.metaDivider, { backgroundColor: colors.border }]} />
                 <Text style={[styles.metaText, { color: colors.textMuted }]}>추천 {upvotes}</Text>
@@ -359,9 +389,11 @@ const styles = StyleSheet.create({
   searchInputCompact: { flex: 1, paddingVertical: 8, fontSize: 13 },
   searchBtnInBox: { paddingHorizontal: 12, paddingVertical: 8, borderTopRightRadius: 10, borderBottomRightRadius: 10 },
   searchBtnInBoxText: { color: '#fff', fontSize: 12, fontWeight: 'bold' },
+  adminBadgeSmall: { paddingHorizontal: 4, paddingVertical: 1, borderRadius: 3 },
+  adminBadgeTextSmall: { color: '#fff', fontSize: 10, fontWeight: 'bold' },
   typeDropdownOverlay: { position: 'absolute', top: 55, left: 12, borderRadius: 8, elevation: 5, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, zIndex: 20, borderWidth: 1 },
   typeOption: { paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1 },
   typeOptionText: { fontSize: 13, fontWeight: '600' },
-  typeBadgeCompact: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, borderWidth: 1 },
-  typeBadgeTextCompact: { fontSize: 10, fontWeight: 'bold' },
+  typeBadgeCompact: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+  typeBadgeTextCompact: { fontSize: 10, fontWeight: '800' },
 });

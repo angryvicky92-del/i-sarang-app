@@ -79,6 +79,13 @@ export const getHomeData = async (userType) => {
         .limit(20);
       
       if (!postError && posts) {
+        // Fetch author profiles for popular posts
+        const authorIds = [...new Set(posts.map(p => p.user_id))];
+        const { data: profiles } = await supabase.from('profiles').select('id, user_type').in('id', authorIds);
+        const profileMap = {};
+        profiles?.forEach(p => { profileMap[p.id] = p; });
+        posts.forEach(p => { p.profiles = profileMap[p.user_id]; });
+
         // 인기가 높은게 있다면 상단으로 재정렬
         const sortedPosts = [...posts].sort((a, b) => {
           const aPop = (a.views || 0) + (a.upvotes || 0) * 3 + (a.post_comments?.[0]?.count || 0) * 2;

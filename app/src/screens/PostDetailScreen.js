@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, ActivityIndicator, TextInput, KeyboardAvoidingView, Platform, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ChevronLeft, User, Calendar, MessageSquare, Send, Trash2, Edit2, X, Eye } from 'lucide-react-native';
+import { ChevronLeft, User, Calendar, MessageSquare, Send, Trash2, Edit2, X, Eye, Check } from 'lucide-react-native';
 import { supabase } from '../services/supabaseClient';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
@@ -57,7 +57,15 @@ export default function PostDetailScreen({ route, navigation }) {
         .single();
       
       if (error) throw error;
-      setPost(data);
+      
+      // Fetch author profile separately to avoid join relationship issues
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('user_type')
+        .eq('id', data.user_id)
+        .single();
+        
+      setPost({ ...data, profiles: profileData });
       
       const urls = data.image_urls || (data.image_url ? [data.image_url] : []);
       urls.forEach(url => {
@@ -66,7 +74,7 @@ export default function PostDetailScreen({ route, navigation }) {
         }, (err) => console.warn('Image size fetch error', err));
       });
     } catch (error) {
-      console.error('Error fetching post:', error.message);
+      console.error('Error fetching post:', error);
     } finally {
       setLoading(false);
     }
@@ -80,7 +88,18 @@ export default function PostDetailScreen({ route, navigation }) {
         .eq('post_id', postId)
         .order('created_at', { ascending: true });
       if (error) throw error;
-      setComments(data || []);
+      
+      // Fetch profiles for all commenters
+      const commenterIds = [...new Set(data.map(c => c.author_id))];
+      const { data: commenterProfiles } = await supabase
+        .from('profiles')
+        .select('id, user_type')
+        .in('id', commenterIds);
+        
+      const profilesMap = (commenterProfiles || []).reduce((acc, p) => ({ ...acc, [p.id]: p }), {});
+      const commentsWithProfiles = data.map(c => ({ ...c, profiles: profilesMap[c.author_id] }));
+      
+      setComments(commentsWithProfiles || []);
       
       // Fetch user's votes for these comments
       if (profile && data && data.length > 0) {
@@ -162,11 +181,26 @@ export default function PostDetailScreen({ route, navigation }) {
         style: 'destructive', 
         onPress: async () => {
           try {
-            const { error } = await supabase.from('post_comments').delete().eq('id', commentId);
-            if (error) throw error;
+            // Check if the comment was actually deleted by using .select()
+            const { data, error } = await supabase.from('post_comments').delete().eq('id', commentId).select();
+            
+            if (error) {
+              throw error;
+            }
+            
+            if (!data || data.length === 0) {
+              // Silently failed in DB (maybe RLS) - Rollback UI
+              Alert.alert('알림', '사용자 권한이 없거나 이미 삭제된 댓글입니다.');
+              fetchComments();
+              return;
+            }
+            
+            // Success - Optimistic update
+            setComments(prev => prev.filter(c => c.id !== commentId));
+          } catch (e) {
+            console.error('Comment delete error:', e);
+            Alert.alert('에러', '댓글 삭제 중 문제가 발생했습니다. 관리자 권한이나 본인 댓글 여부를 확인해주세요.');
             fetchComments();
-          } catch {
-            Alert.alert('에러', '댓글 삭제 중 문제가 발생했습니다.');
           }
         }
       }
@@ -250,7 +284,7 @@ export default function PostDetailScreen({ route, navigation }) {
   if (!post) return <View style={[styles.center, { backgroundColor: colors.background }]}><Text style={{ color: colors.text }}>게시글을 찾을 수 없습니다.</Text></View>;
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <ChevronLeft size={24} color={colors.text} />
@@ -269,18 +303,36 @@ export default function PostDetailScreen({ route, navigation }) {
                   </TouchableOpacity>
                 </>
               ) : (
-                <TouchableOpacity onPress={() => setIsEditingPost(false)} style={styles.headerActionBtn}>
-                  <X size={20} color={colors.textSecondary} />
-                </TouchableOpacity>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <TouchableOpacity onPress={handleUpdatePost} disabled={submitting} style={[styles.headerActionBtn, { marginRight: 8 }]}>
+                    <Check size={20} color={colors.primary} />
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => setIsEditingPost(false)} style={styles.headerActionBtn}>
+                    <X size={20} color={colors.textSecondary} />
+                  </TouchableOpacity>
+                </View>
               )}
             </View>
           )}
         </View>
       </View>
 
-      <ScrollView style={styles.content}>
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined} 
+        style={{ flex: 1 }}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 60 : 0}
+      >
+        <ScrollView 
+          style={styles.content} 
+          contentContainerStyle={{ flexGrow: 1 }}
+          keyboardShouldPersistTaps="handled"
+        >
         <View style={styles.metaRow}>
-          {post.type && (
+          {post.profiles?.user_type === '관리자' ? (
+            <View style={[styles.badge, { backgroundColor: colors.primary, borderColor: colors.primary, borderWidth: 1 }]}>
+              <Text style={[styles.badgeText, { color: '#fff' }]}>관리자</Text>
+            </View>
+          ) : post.type && (
             <View style={[styles.badge, { 
               backgroundColor: post.type === '선생님' 
                 ? (isDarkMode ? '#4A6CF720' : '#EEF2FF') 
@@ -297,7 +349,7 @@ export default function PostDetailScreen({ route, navigation }) {
           )}
           <View style={styles.authorBadge}>
             <User size={12} color={colors.textSecondary} />
-            <TouchableOpacity onPress={() => handleNicknameClick(post.user_id, post.author, post.type)}>
+            <TouchableOpacity onPress={() => handleNicknameClick(post.user_id, post.author, post.type)} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
               <Text style={[styles.authorText, { color: colors.textSecondary }]}>{post.author}</Text>
             </TouchableOpacity>
           </View>
@@ -386,7 +438,12 @@ export default function PostDetailScreen({ route, navigation }) {
             <View key={comment.id} style={[styles.commentItem, { backgroundColor: colors.card }]}>
               <View style={styles.commentMeta}>
                 <View style={styles.commentMetaLeft}>
-                  <TouchableOpacity onPress={() => handleNicknameClick(comment.author_id, comment.author_nickname, null)}>
+                  <TouchableOpacity onPress={() => handleNicknameClick(comment.author_id, comment.author_nickname, null)} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    {comment.profiles?.user_type === '관리자' && (
+                      <View style={[styles.adminBadgeSmall, { backgroundColor: colors.primary }]}>
+                        <Text style={styles.adminBadgeTextSmall}>관리자</Text>
+                      </View>
+                    )}
                     <Text style={[styles.commentAuthor, { color: colors.text }]}>{comment.author_nickname}</Text>
                   </TouchableOpacity>
                   <Text style={[styles.commentDate, { color: colors.textMuted }]}>{new Date(comment.created_at).toLocaleDateString()}</Text>
@@ -446,26 +503,27 @@ export default function PostDetailScreen({ route, navigation }) {
             <Text style={[styles.emptyComments, { color: colors.textMuted }]}>아직 댓글이 없습니다. 첫 댓글을 남겨보세요!</Text>
           )}
         </View>
-      </ScrollView>
+        </ScrollView>
 
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}>
-        <View style={[styles.inputContainer, { borderTopColor: colors.border, backgroundColor: colors.card }]}>
-          <TextInput
-            style={[styles.input, { backgroundColor: colors.background, color: colors.text }]}
-            placeholder="댓글을 입력하세요..."
-            placeholderTextColor={colors.textMuted}
-            value={newComment}
-            onChangeText={setNewComment}
-            multiline
-          />
-          <TouchableOpacity 
-            style={[styles.sendBtn, { backgroundColor: colors.primary }, !newComment.trim() && { opacity: 0.5 }]} 
-            onPress={handleAddComment}
-            disabled={submitting || !newComment.trim()}
-          >
-            {submitting ? <ActivityIndicator size="small" color="#fff" /> : <Send size={20} color="#fff" />}
-          </TouchableOpacity>
-        </View>
+        {!isEditingPost && (
+          <View style={[styles.inputContainer, { borderTopColor: colors.border, backgroundColor: colors.card, paddingBottom: Platform.OS === 'ios' ? 4 : 12 }]}>
+            <TextInput
+              style={[styles.input, { backgroundColor: colors.background, color: colors.text }]}
+              placeholder="댓글을 입력하세요..."
+              placeholderTextColor={colors.textMuted}
+              value={newComment}
+              onChangeText={setNewComment}
+              multiline
+            />
+            <TouchableOpacity 
+              style={[styles.sendBtn, { backgroundColor: colors.primary }, !newComment.trim() && { opacity: 0.5 }]} 
+              onPress={handleAddComment}
+              disabled={submitting || !newComment.trim()}
+            >
+              {submitting ? <ActivityIndicator size="small" color="#fff" /> : <Send size={20} color="#fff" />}
+            </TouchableOpacity>
+          </View>
+        )}
       </KeyboardAvoidingView>
 
       <UserActionModal
@@ -534,5 +592,9 @@ const styles = StyleSheet.create({
   commentEngagement: { marginTop: 12, alignItems: 'flex-end' },
   inputContainer: { flexDirection: 'row', alignItems: 'flex-end', padding: 12, borderTopWidth: 1, gap: 10 },
   input: { flex: 1, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 10, maxHeight: 100, fontSize: 15 },
-  sendBtn: { width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center' }
+  sendBtn: { width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center' },
+  adminBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+  adminBadgeText: { color: '#fff', fontSize: 10, fontWeight: 'bold' },
+  adminBadgeSmall: { paddingHorizontal: 4, paddingVertical: 1, borderRadius: 3 },
+  adminBadgeTextSmall: { color: '#fff', fontSize: 10, fontWeight: 'bold' }
 });

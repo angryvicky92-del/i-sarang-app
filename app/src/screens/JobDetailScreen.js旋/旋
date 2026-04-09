@@ -1,0 +1,348 @@
+import React, { useState, useEffect, useCallback, useLayoutEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Linking, Alert, Share, Dimensions } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { ChevronLeft, Building2, MapPin, Briefcase, Calendar, Phone, Mail, User, UserCheck, CreditCard, Award, Clock, Star, ChevronRight, Bookmark, Eye, Info, Share2, Map as MapIcon, ExternalLink } from 'lucide-react-native';
+import * as Clipboard from 'expo-clipboard';
+import { supabase } from '../services/supabaseClient';
+import { getDaycareByInfo, TYPE_COLORS, TYPE_GOK, getKakaoAddressCenter } from '../services/dataService';
+import { getReviewAverages } from '../services/reviewService';
+import { useAuth } from '../contexts/AuthContext';
+import { useTheme } from '../contexts/ThemeContext';
+import { useSearch } from '../contexts/SearchContext';
+import KakaoMapWebView from '../components/KakaoMapWebView';
+import AdBanner from '../components/AdBanner';
+
+const { width } = Dimensions.get('window');
+
+export default function JobDetailScreen({ route, navigation }) {
+  // Safe extraction to support multiple navigation sources
+  const { id, jobId } = route.params || {};
+  const targetId = id || jobId;
+
+  const { colors, isDarkMode } = useTheme();
+  const { isFavorited, toggleJobFavorite } = useSearch();
+  
+  const [job, setJob] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [isFavoritedState, setIsFavoritedState] = useState(false);
+  const [isToggling, setIsToggling] = useState(false);
+  const [centerCoords, setCenterCoords] = useState(null);
+  const [ratings, setRatings] = useState({ parent: 0, teacher: 0 });
+
+  useLayoutEffect(() => {
+    navigation.setOptions({ headerShown: false });
+  }, [navigation]);
+
+  useEffect(() => {
+    if (targetId && targetId !== 'undefined') {
+      fetchJobDetail();
+      setIsFavoritedState(isFavorited(targetId, 'job'));
+    } else {
+      setLoading(false);
+    }
+  }, [targetId, isFavorited]);
+
+  const fetchJobDetail = async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('job_offers')
+        .select('*')
+        .eq('id', targetId)
+        .single();
+      
+      if (error) throw error;
+      setJob(data);
+
+      // 1. Map Data
+      const addr = data.metadata?.['소재지'] || data.location;
+      if (addr) {
+        getKakaoAddressCenter(addr).then(coords => {
+          if (coords) setCenterCoords(coords);
+        });
+      }
+
+      // 2. Rating Data
+      if (data.center_id) {
+        getReviewAverages(data.center_id).then(res => {
+          if (res) setRatings({ parent: res.parent_avg || 0, teacher: res.teacher_avg || 0 });
+        });
+      }
+
+      // 3. Increment views
+      await supabase.rpc('increment_job_view_count', { row_id: targetId }).catch(() => {});
+    } catch (error) {
+      console.error('Error fetching job detail:', error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const toggleFavorite = async () => {
+    if (!job || isToggling) return;
+    setIsToggling(true);
+    const newState = await toggleJobFavorite(job, navigation);
+    setIsFavoritedState(newState);
+    setIsToggling(false);
+  };
+
+  // Robust mapping helper to fix "정보없음" issue
+  const extractValue = (fieldKeys, defaultValue = '정보 없음') => {
+    if (!job) return defaultValue;
+    const keys = Array.isArray(fieldKeys) ? fieldKeys : [fieldKeys];
+    
+    // Check metadata first (more reliable for detailed crawled data)
+    if (job.metadata) {
+      for (const k of keys) {
+        if (job.metadata[k] && job.metadata[k] !== '-') return job.metadata[k];
+      }
+    }
+    
+    // Check top level table columns
+    for (const k of keys) {
+      if (job[k] && job[k] !== '-') return job[k];
+    }
+    
+    return defaultValue;
+  };
+
+  const renderSummaryCard = ({ label, keys, icon, iconColor, bgColor, highlight = false }, isHalf = false) => {
+    const value = extractValue(keys);
+    return (
+      <View style={[isHalf ? styles.halfCard : styles.fullCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View style={[styles.iconCircle, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.05)' : bgColor }]}>
+          {React.cloneElement(icon, { color: isDarkMode ? colors.primary : iconColor })}
+        </View>
+        <View style={styles.cardInfo}>
+          <Text style={[styles.cardLabel, { color: colors.textSecondary }]}>{label}</Text>
+          <Text style={[styles.cardValue, { color: highlight ? colors.primary : colors.text }]} numberOfLines={isHalf ? 1 : 2}>
+            {value}
+          </Text>
+        </View>
+      </View>
+    );
+  };
+
+  if (loading) return <View style={[styles.center, { backgroundColor: colors.background }]}><ActivityIndicator color={colors.primary} /></View>;
+  if (!job) return <View style={[styles.center, { backgroundColor: colors.background }]}><Text style={{ color: colors.text }}>공고를 찾을 수 없습니다.</Text></View>;
+
+  return (
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+      {/* Header - Matching Screenshot 1 */}
+      <View style={[styles.header, { borderBottomColor: colors.border, backgroundColor: colors.card }]}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerBtn}>
+          <ChevronLeft size={24} color={colors.text} />
+        </TouchableOpacity>
+        <Text style={[styles.headerTitle, { color: colors.text }]} numberOfLines={1}>{job.center_name}</Text>
+        <TouchableOpacity onPress={() => Share.share({ title: job.title, url: job.original_url })} style={styles.headerBtn}>
+          <Share2 size={22} color={colors.textSecondary} />
+        </TouchableOpacity>
+      </View>
+
+      <ScrollView style={styles.content} contentContainerStyle={{ paddingBottom: 100 }}>
+        {/* Top Header Section */}
+        <View style={styles.topHeader}>
+          <View style={[styles.typeBadge, { backgroundColor: isDarkMode ? 'rgba(103, 194, 58, 0.2)' : '#F0F9EB' }]}>
+            <Text style={[styles.typeBadgeText, { color: '#67C23A' }]}>{job.center_type}</Text>
+          </View>
+          <Text style={[styles.mainTitle, { color: colors.text }]}>{job.title}</Text>
+          <View style={styles.postedRow}>
+            <Calendar size={14} color={colors.textMuted} />
+            <Text style={[styles.postedText, { color: colors.textMuted }]}>작성일: {job.posted_at || '최근'}</Text>
+          </View>
+        </View>
+
+        {/* Gray Divider */}
+        <View style={[styles.divider, { backgroundColor: isDarkMode ? colors.border : '#F8FAFC' }]} />
+
+        {/* Summary Grid (Screenshot 1) */}
+        <View style={styles.summarySection}>
+          <View style={styles.sectionHeader}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>모집요강 요약</Text>
+            <View style={[styles.premiumBadge, { backgroundColor: isDarkMode ? colors.background : '#F0F4F8', borderColor: colors.border }]}>
+              <Text style={[styles.premiumBadgeText, { color: colors.textMuted }]}>PREMIUM INFO</Text>
+            </View>
+          </View>
+
+          <View style={styles.summaryGrid}>
+            {renderSummaryCard({ label: '어린이집명', keys: ['center_name'], icon: <Building2 size={18} />, iconColor: '#67C23A', bgColor: '#F0F9EB' })}
+            
+            <View style={styles.row}>
+              {renderSummaryCard({ label: '담당자명', keys: ['담당자', '담당자명', '시설장'], icon: <UserCheck size={18} />, iconColor: '#8B5CF6', bgColor: '#F5F3FF' }, true)}
+              {renderSummaryCard({ label: '모집직종', keys: ['모집직종', '직종'], icon: <Briefcase size={18} />, iconColor: '#F97316', bgColor: '#FFF7ED' }, true)}
+            </View>
+
+            {renderSummaryCard({ label: '근무지 주소', keys: ['소재지', '근무지주소', 'location'], icon: <MapPin size={18} />, iconColor: '#F59E0B', bgColor: '#FFFBEB' })}
+            {renderSummaryCard({ label: '담당자 전화번호', keys: ['연락처', '담당자전화번호', '핸드폰', '전화번호'], icon: <Phone size={18} />, iconColor: '#10B981', bgColor: '#ECFDF5' })}
+            {renderSummaryCard({ label: '이메일 주소', keys: ['담당자 이메일', '이메일', '담당자이메일'], icon: <Mail size={18} />, iconColor: '#EC4899', bgColor: '#FDF2F8' })}
+            {renderSummaryCard({ label: '임금', keys: ['임금', '급여'], icon: <CreditCard size={18} />, iconColor: '#EF4444', bgColor: '#FEF2F2', highlight: true })}
+          </View>
+        </View>
+
+        {/* Map Area - Restored as requested */}
+        {centerCoords && (
+          <View style={[styles.mapContainer, { backgroundColor: colors.card, borderTopWidth: 1, borderBottomWidth: 1, borderColor: colors.border, marginTop: 12 }]}>
+            <View style={[styles.sectionHeader, { paddingHorizontal: 24, paddingTop: 12 }]}>
+              <MapIcon size={18} color={colors.primary} />
+              <Text style={[styles.sectionTitle, { color: colors.text, marginLeft: 8 }]}>현위치 지도</Text>
+            </View>
+            <View style={styles.mapFrame}>
+              <KakaoMapWebView 
+                center={centerCoords} 
+                markers={[{ id: 'work', lat: centerCoords.lat, lng: centerCoords.lng, name: job.center_name }]} 
+              />
+            </View>
+            <View style={{ padding: 24, paddingTop: 10 }}>
+               <Text style={{ color: colors.textSecondary, fontSize: 13 }}>{extractValue(['소재지', 'location'])}</Text>
+            </View>
+          </View>
+        )}
+
+        {/* Additional Metadata Cards (Screenshot 2) */}
+        <View style={styles.metaListSection}>
+          {Object.entries(job.metadata || {}).map(([key, val]) => {
+            const skipped = ['제목', '채용제목', '공유하기', '센터명', '어린이집명', '소재지', '근무지주소'];
+            if (skipped.includes(key)) return null;
+            if (!val || val === '-') return null;
+
+            return (
+              <View key={key} style={[styles.metaDataCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                <View style={styles.metaLabelBox}>
+                  <Text style={[styles.metaLabel, { color: colors.textSecondary }]}>{key}</Text>
+                </View>
+                <View style={styles.metaValueBox}>
+                  <Text style={[styles.metaValue, { color: colors.text }]}>{val}</Text>
+                </View>
+              </View>
+            );
+          })}
+        </View>
+
+        <AdBanner style={{ marginVertical: 10 }} />
+
+        {/* Daycare Info Section (Screenshot 2) */}
+        <View style={styles.centerSection}>
+           <View style={styles.sectionHeader}>
+             <Building2 size={20} color="#67C23A" />
+             <Text style={[styles.sectionTitle, { color: colors.text, marginLeft: 8 }]}>어린이집 정보</Text>
+           </View>
+           <View style={[styles.ratingsCard, { backgroundColor: isDarkMode ? colors.card : '#F8FAFC', borderColor: colors.border }]}>
+              <View style={styles.ratingItem}>
+                <Text style={[styles.ratingLabel, { color: colors.textMuted }]}>학부모 평점</Text>
+                <View style={styles.ratingValBox}>
+                  <Star size={16} color="#67C23A" fill="#67C23A" />
+                  <Text style={[styles.ratingVal, { color: colors.text }]}>{ratings.parent.toFixed(1)}</Text>
+                </View>
+              </View>
+              <View style={styles.ratingDivider} />
+              <View style={styles.ratingItem}>
+                <Text style={[styles.ratingLabel, { color: colors.textMuted }]}>선생님 평점</Text>
+                <View style={styles.ratingValBox}>
+                  <Star size={16} color="#6366F1" fill="#6366F1" />
+                  <Text style={[styles.ratingVal, { color: colors.text }]}>{ratings.teacher.toFixed(1)}</Text>
+                </View>
+              </View>
+           </View>
+           
+           <TouchableOpacity 
+             style={styles.centerLink}
+             onPress={async () => {
+               const foundId = job.center_id || (await getDaycareByInfo(job.center_name, '', job.location))?.id;
+               if (foundId) navigation.navigate('Detail', { daycare: { id: foundId } });
+               else Alert.alert('알림', '상세 정보를 찾을 수 없습니다.');
+             }}
+           >
+             <Text style={[styles.centerLinkText, { color: '#67C23A' }]}>어린이집 상세 보기</Text>
+             <ChevronRight size={18} color="#67C23A" />
+           </TouchableOpacity>
+        </View>
+
+        {/* Detailed Content (Screenshot 2) */}
+        <View style={styles.contentSection}>
+          <View style={styles.sectionHeader}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>상세 모집내용</Text>
+            <View style={[styles.dottedLine, { borderColor: colors.border }]} />
+          </View>
+          <View style={[styles.contentCard, { backgroundColor: isDarkMode ? colors.card : '#F8FAFC', borderColor: colors.border }]}>
+            <Text style={[styles.contentText, { color: colors.text }]}>
+              {job.content || '상세 내용이 없습니다. 원본 공고를 확인해 주세요.'}
+            </Text>
+          </View>
+        </View>
+
+        {/* Global Footer Actions */}
+        <View style={styles.footerActions}>
+          <TouchableOpacity 
+            style={[styles.primaryBtn, { backgroundColor: colors.primary }]}
+            onPress={() => Linking.openURL(job.original_url)}
+          >
+            <ExternalLink size={18} color="#fff" />
+            <Text style={styles.primaryBtnText}>공고 전문 보기</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.favoriteBtn}
+            onPress={toggleFavorite}
+          >
+            <Bookmark size={20} color={isFavoritedState ? colors.primary : colors.textMuted} fill={isFavoritedState ? colors.primary : 'transparent'} />
+            <Text style={[styles.favoriteBtnText, { color: isFavoritedState ? colors.primary : colors.textMuted }]}>관심 공고 등록</Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1 },
+  header: { height: 60, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, borderBottomWidth: 1 },
+  headerTitle: { flex: 1, textAlign: 'center', fontSize: 16, fontWeight: 'bold' },
+  headerBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
+  content: { flex: 1 },
+  topHeader: { padding: 24 },
+  typeBadge: { alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6, marginBottom: 12 },
+  typeBadgeText: { fontSize: 12, fontWeight: 'bold' },
+  mainTitle: { fontSize: 24, fontWeight: '800', lineHeight: 32, marginBottom: 16 },
+  postedRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  postedText: { fontSize: 13 },
+  divider: { height: 8 },
+  summarySection: { padding: 24 },
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  sectionTitle: { fontSize: 18, fontWeight: 'bold' },
+  premiumBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4, borderWidth: 1 },
+  premiumBadgeText: { fontSize: 10, fontWeight: '800' },
+  summaryGrid: { gap: 12 },
+  fullCard: { flexDirection: 'row', alignItems: 'center', padding: 16, borderRadius: 16, borderWidth: 1 },
+  row: { flexDirection: 'row', gap: 12 },
+  halfCard: { flex: 1, flexDirection: 'row', alignItems: 'center', padding: 16, borderRadius: 16, borderWidth: 1 },
+  iconCircle: { width: 40, height: 40, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
+  cardInfo: { marginLeft: 16, flex: 1 },
+  cardLabel: { fontSize: 11, marginBottom: 4 },
+  cardValue: { fontSize: 15, fontWeight: 'bold' },
+  mapContainer: { marginTop: 12 },
+  mapFrame: { height: 200, marginHorizontal: 24, borderRadius: 16, overflow: 'hidden' },
+  metaListSection: { padding: 24, gap: 12 },
+  metaDataCard: { flexDirection: 'row', alignItems: 'center', padding: 18, borderRadius: 16, borderWidth: 1 },
+  metaLabelBox: { width: 120 },
+  metaLabel: { fontSize: 13, fontWeight: '600' },
+  metaValueBox: { flex: 1 },
+  metaValue: { fontSize: 14, fontWeight: '700' },
+  centerSection: { padding: 24, marginTop: 12 },
+  ratingsCard: { flexDirection: 'row', padding: 24, borderRadius: 20, borderWidth: 1 },
+  ratingItem: { flex: 1, alignItems: 'center' },
+  ratingLabel: { fontSize: 12, marginBottom: 8 },
+  ratingValBox: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  ratingVal: { fontSize: 18, fontWeight: '800' },
+  ratingDivider: { width: 1, height: '100%', backgroundColor: '#eee', marginHorizontal: 20 },
+  centerLink: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 16, gap: 4 },
+  centerLinkText: { fontSize: 15, fontWeight: 'bold' },
+  contentSection: { padding: 24 },
+  dottedLine: { flex: 1, height: 1, borderStyle: 'dotted', borderWidth: 1, borderRadius: 1, marginLeft: 16 },
+  contentCard: { padding: 24, borderRadius: 24, marginTop: 16, borderWidth: 1 },
+  contentText: { fontSize: 15, lineHeight: 26 },
+  footerActions: { padding: 24, gap: 12 },
+  primaryBtn: { height: 56, borderRadius: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
+  primaryBtnText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+  favoriteBtn: { height: 54, borderRadius: 16, borderStyle: 'dotted', borderWidth: 1, borderColor: '#eee', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
+  favoriteBtnText: { fontSize: 15, fontWeight: 'bold' },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center' }
+});

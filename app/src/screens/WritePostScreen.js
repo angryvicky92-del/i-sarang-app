@@ -17,6 +17,7 @@ export default function WritePostScreen({ route, navigation }) {
   const [imageUris, setImageUris] = useState([]);
   const [imageBase64s, setImageBase64s] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [isNotice, setIsNotice] = useState(false);
 
   const pickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -102,6 +103,7 @@ export default function WritePostScreen({ route, navigation }) {
           title: title.trim(),
           content: content.trim(),
           type: targetBoardType,
+          is_notice: isNotice,
           image_url: imageUrls[0] || null, // First image for legacy/list view
           image_urls: imageUrls
         }
@@ -120,8 +122,12 @@ export default function WritePostScreen({ route, navigation }) {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.flex1}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined} 
+        style={styles.flex1}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+      >
         <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.closeBtn}>
             <X size={24} color={colors.text} />
@@ -134,7 +140,12 @@ export default function WritePostScreen({ route, navigation }) {
           </TouchableOpacity>
         </View>
 
-        <ScrollView contentContainerStyle={styles.form}>
+        <ScrollView 
+          style={styles.flex1}
+          contentContainerStyle={styles.form}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+        >
           <TextInput
             style={[styles.inputTitle, { color: colors.text, borderBottomColor: colors.border }]}
             placeholder="제목을 입력하세요."
@@ -143,6 +154,18 @@ export default function WritePostScreen({ route, navigation }) {
             onChangeText={setTitle}
             maxLength={50}
           />
+
+          {profile?.user_type === '관리자' && (
+            <View style={[styles.noticeToggle, { borderBottomColor: colors.border }]}>
+               <Text style={[styles.noticeText, { color: colors.textSecondary }]}>공지사항으로 등록</Text>
+               <TouchableOpacity 
+                 onPress={() => setIsNotice(!isNotice)} 
+                 style={[styles.switch, { backgroundColor: isNotice ? colors.primary : colors.border }]}
+               >
+                 <View style={[styles.switchHandle, { transform: [{ translateX: isNotice ? 20 : 0 }] }]} />
+               </TouchableOpacity>
+            </View>
+          )}
           <TextInput
             style={[styles.inputContent, { color: colors.textSecondary }]}
             placeholder="내용을 자유롭게 남겨주세요."
@@ -192,7 +215,13 @@ export default function WritePostScreen({ route, navigation }) {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   flex1: { flex: 1 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1 },
+  header: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center', 
+    padding: 16, 
+    borderBottomWidth: 1 
+  },
   closeBtn: { padding: 4 },
   headerTitle: { fontSize: 18, fontWeight: 'bold' },
   submitBtn: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 },
@@ -200,6 +229,17 @@ const styles = StyleSheet.create({
   disabledText: { opacity: 0.7 },
   form: { padding: 20 },
   inputTitle: { fontSize: 20, fontWeight: 'bold', marginBottom: 20, borderBottomWidth: 1, paddingBottom: 12 },
+  noticeToggle: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    justifyContent: 'space-between', 
+    paddingVertical: 12, 
+    borderBottomWidth: 1,
+    marginBottom: 20
+  },
+  noticeText: { fontSize: 16, fontWeight: '600' },
+  switch: { width: 44, height: 24, borderRadius: 12, padding: 2, justifyContent: 'center' },
+  switchHandle: { width: 20, height: 20, borderRadius: 10, backgroundColor: '#fff' },
   inputContent: { fontSize: 16, minHeight: 200, lineHeight: 24, marginBottom: 20 },
   imageSection: { marginTop: 10, borderTopWidth: 1, paddingTop: 20 },
   imageBtn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10, alignSelf: 'flex-start' },

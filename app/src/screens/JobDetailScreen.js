@@ -11,7 +11,10 @@ import { useTheme } from '../contexts/ThemeContext';
 import AdBanner from '../components/AdBanner';
 
 export default function JobDetailScreen({ route, navigation }) {
-  const { jobId } = route.params;
+  // Support both 'id' and 'jobId' parameter names to prevent crashes
+  const { id, jobId } = route.params || {};
+  const targetId = id || jobId;
+
   const { session } = useAuth();
   const { colors, isDarkMode } = useTheme();
   const [job, setJob] = useState(null);
@@ -25,23 +28,27 @@ export default function JobDetailScreen({ route, navigation }) {
   }, [navigation]);
 
   useEffect(() => {
-    fetchJobDetail();
-    incrementViewCount();
-  }, [jobId]);
+    if (targetId) {
+      fetchJobDetail();
+      incrementViewCount();
+    }
+  }, [targetId]);
 
   const incrementViewCount = async () => {
+    if (!targetId) return;
     try {
-      await supabase.rpc('increment_views', { table_name: 'job_offers', row_id: jobId });
+      // Use the project's existing RPC name
+      await supabase.rpc('increment_views', { table_name: 'job_offers', row_id: targetId });
     } catch (error) {
       console.error('Error incrementing job views:', error);
     }
   };
 
   useEffect(() => {
-    if (session && jobId) {
+    if (session && targetId) {
       checkFavoriteStatus();
     }
-  }, [session, jobId]);
+  }, [session, targetId]);
 
   const checkFavoriteStatus = async () => {
     try {
@@ -49,7 +56,7 @@ export default function JobDetailScreen({ route, navigation }) {
         .from('job_favorites')
         .select('*')
         .eq('user_id', session.user.id)
-        .eq('job_id', jobId)
+        .eq('job_id', targetId)
         .maybeSingle();
       
       if (!error && data) {
@@ -78,7 +85,7 @@ export default function JobDetailScreen({ route, navigation }) {
           .from('job_favorites')
           .delete()
           .eq('user_id', session.user.id)
-          .eq('job_id', jobId);
+          .eq('job_id', targetId);
         
         if (error) throw error;
         setIsFavorited(false);
@@ -87,7 +94,7 @@ export default function JobDetailScreen({ route, navigation }) {
           .from('job_favorites')
           .insert({
             user_id: session.user.id,
-            job_id: jobId,
+            job_id: targetId,
             job_snapshot: {
               id: job.id,
               title: job.title,
@@ -111,7 +118,7 @@ export default function JobDetailScreen({ route, navigation }) {
   };
 
   const fetchJobDetail = async () => {
-    if (!jobId) {
+    if (!targetId || targetId === 'undefined') {
       setLoading(false);
       return;
     }
@@ -119,7 +126,7 @@ export default function JobDetailScreen({ route, navigation }) {
       const { data, error } = await supabase
         .from('job_offers')
         .select('*')
-        .eq('id', jobId)
+        .eq('id', targetId)
         .single();
       
       if (error) throw error;
@@ -128,7 +135,7 @@ export default function JobDetailScreen({ route, navigation }) {
       // Fetch Live Ratings
       if (data.center_id) {
         const ratings = await getReviewAverages(data.center_id);
-        setLiveRatings(ratings);
+        if (ratings) setLiveRatings(ratings);
       }
     } catch (error) {
       console.error('Error fetching job detail:', error.message);

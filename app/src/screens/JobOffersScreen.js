@@ -140,7 +140,7 @@ export default function JobOffersScreen({ navigation }) {
   const districts = sidoCode ? [{ name: '전체', code: 'all' }, ...(SIGUNGU_LIST[sidoCode] || [])] : [];
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
 
       <View style={[styles.searchBarContainer, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
         <View style={styles.searchMainRow}>
@@ -306,7 +306,7 @@ export default function JobOffersScreen({ navigation }) {
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 }
 

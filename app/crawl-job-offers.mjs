@@ -122,13 +122,12 @@ async function crawl() {
           }
           
           if (!description) {
-            // Enhanced table selectors fallback
-            const table = document.querySelector('.com_view table') || 
+            // Updated table selector for central.childcare.go.kr
+            const table = document.querySelector('table.table_view') || 
+                          document.querySelector('.com_view table') || 
                           document.querySelector('table.board_view') || 
                           document.querySelector('table.tbl_view') || 
-                          document.querySelector('.com_table table') || 
-                          document.querySelectorAll('#contents table')[1] || 
-                          document.querySelector('#contents table');
+                          document.querySelector('.com_table table');
                           
             if (table) {
               const tableRows = table.querySelectorAll('tr');
@@ -136,15 +135,23 @@ async function crawl() {
                 const thList = row.querySelectorAll('th');
                 const tdList = row.querySelectorAll('td');
                 
-                if (thList.length > 0) {
-                  for(let i=0; i<thList.length; i++) {
-                    const label = thList[i].innerText.trim();
-                    const value = tdList[i] ? tdList[i].innerText.trim() : '';
-                    if (!metadata['채용제목'] && (label === '제목' || label === '채용제목' || label === '모집제목')) {
-                      metadata['채용제목'] = value;
-                    } else if (label && !['등록자', '등록일', '조회'].includes(label)) {
-                      metadata[label] = value;
-                    }
+                for(let i=0; i < thList.length; i++) {
+                  const label = thList[i].innerText.trim();
+                  const value = tdList[i] ? tdList[i].innerText.trim() : '';
+                  if (!label) continue;
+
+                  if (!metadata['채용제목'] && (label === '제목' || label === '채용제목' || label === '모집제목' || label === '채용 제목')) {
+                    metadata['채용제목'] = value;
+                  } else if (!['등록자', '등록일', '조회'].includes(label)) {
+                    // Standardize common keys for the UI
+                    let key = label;
+                    if (['임금', '급여', '보수'].includes(label)) key = '임금';
+                    if (['연락처', '전화번호', '휴대전화', '담당자전화번호', '담당자 전화번호'].includes(label)) key = '연락처';
+                    if (['담당자', '담당자명'].includes(label)) key = '담당자명';
+                    if (['직종', '모집직종'].includes(label)) key = '모집직종';
+                    if (['소재지', '근무지주소', '근무지 주소'].includes(label)) key = '소재지';
+                    
+                    metadata[key] = value;
                   }
                 }
               });

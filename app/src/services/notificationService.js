@@ -45,12 +45,31 @@ export const registerForPushNotificationsAsync = async (userId) => {
 
     // Save token to Supabase profile
     if (userId) {
+      // Attempt to clear this token from any other accounts
+      // Note: This may fail silently due to RLS permissions (can't update others' rows)
+      try {
+        await supabase
+          .from('profiles')
+          .update({ push_token: null })
+          .eq('push_token', token)
+          .neq('id', userId);
+      } catch (e) {
+        console.warn('Attempt to clear old push tokens failed (likely RLS):', e.message);
+      }
+
       const { error } = await supabase
         .from('profiles')
         .update({ push_token: token })
         .eq('id', userId);
         
-      if (error) console.error('Error saving push token to Supabase:', error);
+      if (error) {
+        if (error.code === '23505') {
+          console.warn('Push token already in use by another account. Multiple users on same device?');
+          // We can't do much from the client if RLS is strict, but we shouldn't crash.
+        } else {
+          console.error('Error saving push token to Supabase:', error.message);
+        }
+      }
     }
 
     if (Platform.OS === 'android') {
