@@ -1,6 +1,6 @@
 name: Build Android
 on:
-  workflow_dispatch: # Allows manual trigger from GitHub Actions tab
+  workflow_dispatch:
 
 jobs:
   build:
@@ -16,6 +16,15 @@ jobs:
           cache: 'npm'
           cache-path: app/package-lock.json
 
+      - name: Setup Java (JDK 17)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu' # or 'temurin'
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
       - name: Setup Expo
         uses: expo/expo-github-action@v8
         with:
@@ -29,9 +38,9 @@ jobs:
 
       - name: Build Android AAB (Free Local Build)
         working-directory: app
+        env:
+          JAVA_HOME: /usr/lib/jvm/zulu-17-ca-amd64 # actions/setup-java sets this automatically, but being explicit helps
         run: |
-          # Note: Using --local flag to bypass EAS cloud build limits
-          # This uses the GitHub Runner's resources to build the app
           npx eas-cli build --platform android --profile production --local --non-interactive --output=./uljip_check_v2.aab
 
       - name: Upload Artifact
