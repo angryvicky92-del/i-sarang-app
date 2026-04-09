@@ -558,7 +558,6 @@ export default function PostDetailScreen({ route, navigation }) {
             <TouchableOpacity 
               style={[styles.sendBtn, { backgroundColor: colors.primary }, !newComment.trim() && { opacity: 0.5 }]} 
               onPress={handleAddComment}
-              disabled={submitting || !newComment.trim()}
             >
               {submitting ? <ActivityIndicator size="small" color="#fff" /> : <Send size={20} color="#fff" />}
             </TouchableOpacity>
@@ -580,7 +579,7 @@ export default function PostDetailScreen({ route, navigation }) {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   header: { 
-    height: 60, 
+    height: 64, 
     flexDirection: 'row', 
     alignItems: 'center', 
     justifyContent: 'space-between', 
@@ -588,57 +587,143 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1 
   },
   backBtn: { padding: 4 },
-  headerTitle: { fontSize: 17, fontWeight: 'bold' },
-  headerRight: { width: 80, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 4 },
+  headerTitle: { fontSize: 18, fontWeight: '700' },
+  headerRight: { width: 88, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 4 },
   headerActionBtn: { padding: 8 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  content: { padding: 20 },
+  content: { padding: 24 },
   
-  // Edit Styles
-  editPostContainer: { marginBottom: 24, padding: 16, borderRadius: 12 },
-  editLabel: { fontSize: 13, fontWeight: 'bold', marginBottom: 4 },
-  editLabelSmall: { fontSize: 11, fontWeight: 'bold', marginBottom: 6 },
-  editTitleInput: { fontSize: 18, fontWeight: 'bold', borderBottomWidth: 1, paddingVertical: 8, marginBottom: 8 },
-  editContentInput: { fontSize: 16, borderBottomWidth: 1, paddingVertical: 8, marginBottom: 16, minHeight: 150, textAlignVertical: 'top' },
-  saveBtn: { padding: 12, borderRadius: 8, alignItems: 'center', marginTop: 8 },
-  saveBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
+  // Edit Mode Styles
+  editPostContainer: { 
+    marginBottom: 32, 
+    padding: 20, 
+    borderRadius: 20, 
+    borderStyle: 'dashed'
+  },
+  editLabel: { fontSize: 12, fontWeight: '800', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1 },
+  editLabelSmall: { fontSize: 11, fontWeight: '800', marginBottom: 10, textTransform: 'uppercase' },
+  editTitleInput: { fontSize: 22, fontWeight: 'bold', borderBottomWidth: 1, paddingVertical: 12, marginBottom: 12 },
+  editContentInput: { fontSize: 17, paddingVertical: 12, marginBottom: 20, minHeight: 250, textAlignVertical: 'top', lineHeight: 26 },
+  saveBtn: { 
+    padding: 16, 
+    borderRadius: 14, 
+    alignItems: 'center', 
+    marginTop: 12,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 }
+  },
+  saveBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
   
-  editCommentContainer: { marginTop: 8 },
-  editCommentInput: { borderWidth: 1, borderRadius: 8, padding: 10, fontSize: 14, minHeight: 80, textAlignVertical: 'top' },
-  commentSaveBtn: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 },
-  commentCancelBtn: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 },
-  commentSaveText: { color: '#fff', fontSize: 13, fontWeight: 'bold' },
-  commentCancelText: { fontSize: 13, fontWeight: '600' },
-  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 },
-  badge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1 },
-  badgeText: { fontSize: 11, fontWeight: 'bold' },
-  authorBadge: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  authorText: { fontSize: 13 },
-  dateBadge: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  dateText: { fontSize: 13 },
-  viewBadge: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  viewText: { fontSize: 13 },
-  title: { fontSize: 22, fontWeight: '800', marginBottom: 20, lineHeight: 30 },
-  image: { width: '100%', height: 300, borderRadius: 12, marginBottom: 20 },
-  bodyText: { fontSize: 16, lineHeight: 26 },
-  commentSection: { marginTop: 40, paddingBottom: 60 },
-  divider: { height: 1, marginBottom: 20 },
-  sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 20 },
-  sectionTitle: { fontSize: 18, fontWeight: 'bold' },
-  commentItem: { marginBottom: 20, padding: 16, borderRadius: 12 },
-  commentMeta: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  commentMetaLeft: { flexDirection: 'row', gap: 8, alignItems: 'center' },
-  commentAuthor: { fontWeight: 'bold', fontSize: 14 },
+  editCommentContainer: { marginTop: 16 },
+  editCommentInput: { 
+    borderWidth: 1, 
+    borderRadius: 14, 
+    padding: 14, 
+    fontSize: 16, 
+    minHeight: 120, 
+    textAlignVertical: 'top', 
+    lineHeight: 24 
+  },
+  commentSaveBtn: { paddingHorizontal: 20, paddingVertical: 11, borderRadius: 10 },
+  commentCancelBtn: { paddingHorizontal: 20, paddingVertical: 11, borderRadius: 10 },
+  commentSaveText: { color: '#fff', fontSize: 14, fontWeight: 'bold' },
+  commentCancelText: { fontSize: 14, fontWeight: '600' },
+
+  // Viewing Mode Styles
+  metaRow: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    justifyContent: 'space-between', 
+    marginBottom: 28, 
+    paddingBottom: 20,
+    borderBottomWidth: 1 
+  },
+  metaLeft: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  metaRight: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  metaItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  metaItemText: { fontSize: 13, fontWeight: '500' },
+  authorGroup: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  badge: { 
+    paddingHorizontal: 10, 
+    paddingVertical: 5, 
+    borderRadius: 8, 
+    borderWidth: 1 
+  },
+  badgeText: { fontSize: 11, fontWeight: '900' },
+  authorText: { fontSize: 14, fontWeight: '700' },
+  title: { 
+    fontSize: 26, 
+    fontWeight: '800', 
+    marginBottom: 28, 
+    lineHeight: 36, 
+    letterSpacing: -0.6 
+  },
+  image: { width: '100%', borderRadius: 20, marginBottom: 28 },
+  bodyText: { fontSize: 18, lineHeight: 30, letterSpacing: 0.3 },
+  
+  // Comment Section
+  commentSection: { marginTop: 48, paddingBottom: 120 },
+  divider: { height: 1.5, marginBottom: 28 },
+  sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 28 },
+  sectionTitle: { fontSize: 20, fontWeight: '800' },
+  commentItem: { 
+    marginBottom: 16, 
+    padding: 20, 
+    borderRadius: 20, 
+    borderWidth: 1, 
+    borderColor: 'transparent',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 }
+  },
+  commentMeta: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
+  commentMetaLeft: { flexDirection: 'row', gap: 12, alignItems: 'center' },
+  commentAuthor: { fontWeight: '700', fontSize: 15 },
   commentDate: { fontSize: 12 },
-  commentContent: { fontSize: 14, lineHeight: 20 },
-  emptyComments: { textAlign: 'center', marginTop: 20, fontSize: 14 },
-  postEngagement: { marginTop: 32, marginBottom: 8, flexDirection: 'row', justifyContent: 'center' },
-  commentEngagement: { marginTop: 12, alignItems: 'flex-end' },
-  inputContainer: { flexDirection: 'row', alignItems: 'flex-end', padding: 12, borderTopWidth: 1, gap: 10 },
-  input: { flex: 1, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 10, maxHeight: 100, fontSize: 15 },
-  sendBtn: { width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center' },
-  adminBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
-  adminBadgeText: { color: '#fff', fontSize: 10, fontWeight: 'bold' },
-  adminBadgeSmall: { paddingHorizontal: 4, paddingVertical: 1, borderRadius: 3 },
+  commentContent: { fontSize: 16, lineHeight: 24 },
+  emptyComments: { textAlign: 'center', marginTop: 48, fontSize: 16 },
+  postEngagement: { marginTop: 48, marginBottom: 16, flexDirection: 'row', justifyContent: 'center' },
+  commentEngagement: { marginTop: 18, alignItems: 'flex-end' },
+  
+  // Sticky Footer
+  inputContainer: { 
+    flexDirection: 'row', 
+    alignItems: 'flex-end', 
+    padding: 16, 
+    borderTopWidth: 1, 
+    gap: 12,
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: -5 }
+  },
+  input: { 
+    flex: 1, 
+    borderRadius: 26, 
+    paddingHorizontal: 20, 
+    paddingVertical: 14, 
+    maxHeight: 120, 
+    fontSize: 16,
+    fontWeight: '500'
+  },
+  sendBtn: { 
+    width: 52, 
+    height: 52, 
+    borderRadius: 26, 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 }
+  },
+  adminBadgeSmall: { paddingHorizontal: 5, paddingVertical: 2, borderRadius: 5 },
   adminBadgeTextSmall: { color: '#fff', fontSize: 10, fontWeight: 'bold' }
 });

@@ -132,10 +132,10 @@ export default function WritePostScreen({ route, navigation }) {
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.closeBtn}>
             <X size={24} color={colors.text} />
           </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>글쓰기</Text>
+          <Text style={[styles.headerTitle, { color: colors.text }]}>게시글 작성</Text>
           <TouchableOpacity onPress={handleSubmit} disabled={loading} style={[styles.submitBtn, { backgroundColor: colors.primary }]}>
             <Text style={[styles.submitText, loading && styles.disabledText]}>
-              {loading ? '등록중' : '등록'}
+              {loading ? '등록 중' : '등록'}
             </Text>
           </TouchableOpacity>
         </View>
@@ -146,35 +146,40 @@ export default function WritePostScreen({ route, navigation }) {
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
         >
-          <TextInput
-            style={[styles.inputTitle, { color: colors.text, borderBottomColor: colors.border }]}
-            placeholder="제목을 입력하세요."
-            placeholderTextColor={colors.textMuted}
-            value={title}
-            onChangeText={setTitle}
-            maxLength={50}
-          />
+          <View style={[styles.inputCard, { backgroundColor: isDarkMode ? '#2D3748' : '#F7FAFC' }]}>
+            <Text style={[styles.inputLabel, { color: colors.primary }]}>제목</Text>
+            <TextInput
+              style={[styles.inputTitle, { color: colors.text, borderBottomColor: colors.border }]}
+              placeholder="게시글의 제목을 입력하세요"
+              placeholderTextColor={colors.textMuted}
+              value={title}
+              onChangeText={setTitle}
+              maxLength={50}
+            />
 
-          {profile?.user_type === '관리자' && (
-            <View style={[styles.noticeToggle, { borderBottomColor: colors.border }]}>
-               <Text style={[styles.noticeText, { color: colors.textSecondary }]}>공지사항으로 등록</Text>
-               <TouchableOpacity 
-                 onPress={() => setIsNotice(!isNotice)} 
-                 style={[styles.switch, { backgroundColor: isNotice ? colors.primary : colors.border }]}
-               >
-                 <View style={[styles.switchHandle, { transform: [{ translateX: isNotice ? 20 : 0 }] }]} />
-               </TouchableOpacity>
-            </View>
-          )}
-          <TextInput
-            style={[styles.inputContent, { color: colors.textSecondary }]}
-            placeholder="내용을 자유롭게 남겨주세요."
-            placeholderTextColor={colors.textMuted}
-            value={content}
-            onChangeText={setContent}
-            multiline
-            textAlignVertical="top"
-          />
+            {profile?.user_type === '관리자' && (
+              <View style={[styles.noticeToggle, { borderBottomColor: colors.border }]}>
+                 <Text style={[styles.noticeText, { color: colors.textSecondary }]}>중요 공지사항으로 등록</Text>
+                 <TouchableOpacity 
+                   onPress={() => setIsNotice(!isNotice)} 
+                   style={[styles.switch, { backgroundColor: isNotice ? colors.primary : colors.border }]}
+                 >
+                   <View style={[styles.switchHandle, { transform: [{ translateX: isNotice ? 20 : 0 }] }]} />
+                 </TouchableOpacity>
+              </View>
+            )}
+
+            <Text style={[styles.inputLabel, { color: colors.primary, marginTop: 12 }]}>내용</Text>
+            <TextInput
+              style={[styles.inputContent, { color: colors.textSecondary }]}
+              placeholder="내용을 자유롭게 작성해 주세요..."
+              placeholderTextColor={colors.textMuted}
+              value={content}
+              onChangeText={setContent}
+              multiline
+              textAlignVertical="top"
+            />
+          </View>
           
           <View style={[styles.imageSection, { borderTopColor: colors.border }]}>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
@@ -216,36 +221,51 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   flex1: { flex: 1 },
   header: { 
+    height: 64,
     flexDirection: 'row', 
     justifyContent: 'space-between', 
     alignItems: 'center', 
-    padding: 16, 
+    paddingHorizontal: 16, 
     borderBottomWidth: 1 
   },
   closeBtn: { padding: 4 },
-  headerTitle: { fontSize: 18, fontWeight: 'bold' },
-  submitBtn: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 },
+  headerTitle: { fontSize: 18, fontWeight: '700' },
+  submitBtn: { paddingHorizontal: 20, paddingVertical: 10, borderRadius: 24, elevation: 2, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 4, shadowOffset: { width: 0, height: 2 } },
   submitText: { color: '#fff', fontWeight: 'bold', fontSize: 14 },
   disabledText: { opacity: 0.7 },
   form: { padding: 20 },
-  inputTitle: { fontSize: 20, fontWeight: 'bold', marginBottom: 20, borderBottomWidth: 1, paddingBottom: 12 },
+  inputCard: { padding: 20, borderRadius: 20, marginBottom: 20 },
+  inputLabel: { fontSize: 12, fontWeight: '800', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 },
+  inputTitle: { fontSize: 20, fontWeight: 'bold', marginBottom: 16, borderBottomWidth: 1, paddingBottom: 12 },
   noticeToggle: { 
     flexDirection: 'row', 
     alignItems: 'center', 
     justifyContent: 'space-between', 
-    paddingVertical: 12, 
+    paddingVertical: 14, 
     borderBottomWidth: 1,
-    marginBottom: 20
+    marginBottom: 16
   },
-  noticeText: { fontSize: 16, fontWeight: '600' },
+  noticeText: { fontSize: 15, fontWeight: '600' },
   switch: { width: 44, height: 24, borderRadius: 12, padding: 2, justifyContent: 'center' },
   switchHandle: { width: 20, height: 20, borderRadius: 10, backgroundColor: '#fff' },
-  inputContent: { fontSize: 16, minHeight: 200, lineHeight: 24, marginBottom: 20 },
-  imageSection: { marginTop: 10, borderTopWidth: 1, paddingTop: 20 },
-  imageBtn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10, alignSelf: 'flex-start' },
-  imageBtnText: { marginLeft: 8, fontWeight: 'bold', fontSize: 14 },
-  imageScroll: { paddingRight: 20, gap: 12, paddingVertical: 10 },
-  imagePreviewContainer: { position: 'relative', width: 100, height: 100, borderRadius: 12 },
-  imagePreview: { width: 100, height: 100, borderRadius: 12 },
-  removeImageBtn: { position: 'absolute', top: -6, right: -6, borderRadius: 12, padding: 4, elevation: 5, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 3, shadowOffset: { width: 0, height: 2 }, zIndex: 10 }
+  inputContent: { fontSize: 16, minHeight: 400, lineHeight: 24, textAlignVertical: 'top' },
+  imageSection: { marginTop: 8, borderTopWidth: 1, paddingTop: 24 },
+  imageBtn: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    paddingHorizontal: 18, 
+    paddingVertical: 12, 
+    borderRadius: 12, 
+    alignSelf: 'flex-start',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 5,
+    shadowOffset: { width: 0, height: 2 }
+  },
+  imageBtnText: { marginLeft: 8, fontWeight: '700', fontSize: 14 },
+  imageScroll: { paddingRight: 20, gap: 14, paddingVertical: 12 },
+  imagePreviewContainer: { position: 'relative', width: 110, height: 110 },
+  imagePreview: { width: 110, height: 110, borderRadius: 16 },
+  removeImageBtn: { position: 'absolute', top: -8, right: -8, borderRadius: 14, padding: 6, elevation: 6, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, zIndex: 10 }
 });
