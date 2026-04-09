@@ -15,17 +15,21 @@ import { SettingsProvider } from './src/contexts/SettingsContext';
 import { ChatProvider, useChat } from './src/contexts/ChatContext';
 import * as SplashScreen from 'expo-splash-screen';
 import * as Notifications from 'expo-notifications';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { registerForPushNotificationsAsync } from './src/services/notificationService';
+
+const queryClient = new QueryClient();
+
 import HomeScreen from './src/screens/HomeScreen';
 import HomeMapScreen from './src/screens/HomeMapScreen';
 import CenterListScreen from './src/screens/CenterListScreen';
 import CenterDetailScreen from './src/screens/CenterDetailScreen';
-import CommunityScreen from './src/screens/CommunityScreen';
+import { CommunityScreen } from './src/screens/CommunityScreen';
 import MyPageScreen from './src/screens/MyPageScreen';
 import LoginScreen from './src/screens/LoginScreen';
-import WritePostScreen from './src/screens/WritePostScreen';
+import { WritePostScreen } from './src/screens/WritePostScreen';
 import AdminApprovalScreen from './src/screens/AdminApprovalScreen';
-import PostDetailScreen from './src/screens/PostDetailScreen';
+import { PostDetailScreen } from './src/screens/PostDetailScreen';
 import JobDetailScreen from './src/screens/JobDetailScreen';
 import TeacherCertificationScreen from './src/screens/TeacherCertificationScreen';
 import FavoriteJobsScreen from './src/screens/FavoriteJobsScreen';
@@ -352,18 +356,20 @@ export default function App() {
   }, []);
 
   return (
-    <SafeAreaProvider initialMetrics={initialWindowMetrics}>
-      <ThemeProvider>
-        <SettingsProvider>
-          <AuthProvider>
-            <ChatProvider>
-              <SearchProvider>
-                <ThemedNavigation />
-              </SearchProvider>
-            </ChatProvider>
-          </AuthProvider>
-        </SettingsProvider>
-      </ThemeProvider>
-    </SafeAreaProvider>
+    <QueryClientProvider client={queryClient}>
+      <SafeAreaProvider initialMetrics={initialWindowMetrics}>
+        <ThemeProvider>
+          <SettingsProvider>
+            <AuthProvider>
+              <ChatProvider>
+                <SearchProvider>
+                  <ThemedNavigation />
+                </SearchProvider>
+              </ChatProvider>
+            </AuthProvider>
+          </SettingsProvider>
+        </ThemeProvider>
+      </SafeAreaProvider>
+    </QueryClientProvider>
   );
 }

@@ -89,11 +89,14 @@ export default function EngagementButtons({ targetType, targetId, item, userVote
       <TouchableOpacity 
         style={[
           styles.btn, 
-          { backgroundColor: isDarkMode ? '#2D3748' : '#F1F5F9' },
+          { backgroundColor: isDarkMode ? colors.cardSecondary : '#F1F5F9' },
           userVote === 1 && { backgroundColor: colors.primary }
         ]} 
         onPress={() => handleVote(1)}
         disabled={loading}
+        accessibilityLabel={`추천, 현재 ${upCount}개`}
+        accessibilityRole="button"
+        accessibilityState={{ selected: userVote === 1 }}
       >
         <ThumbsUp size={14} color={userVote === 1 ? '#fff' : colors.textSecondary} fill={userVote === 1 ? '#fff' : 'transparent'} />
         <Text style={[styles.countText, { color: colors.textSecondary }, userVote === 1 && styles.activeText]}>{upCount}</Text>
@@ -102,11 +105,14 @@ export default function EngagementButtons({ targetType, targetId, item, userVote
       <TouchableOpacity 
         style={[
           styles.btn, 
-          { backgroundColor: isDarkMode ? '#2D3748' : '#F1F5F9' },
-          userVote === -1 && { backgroundColor: '#FF4B4B' }
+          { backgroundColor: isDarkMode ? colors.cardSecondary : '#F1F5F9' },
+          userVote === -1 && { backgroundColor: colors.error }
         ]} 
         onPress={() => handleVote(-1)}
         disabled={loading}
+        accessibilityLabel={`비추천, 현재 ${downCount}개`}
+        accessibilityRole="button"
+        accessibilityState={{ selected: userVote === -1 }}
       >
         <ThumbsDown size={14} color={userVote === -1 ? '#fff' : colors.textSecondary} fill={userVote === -1 ? '#fff' : 'transparent'} />
         <Text style={[styles.countText, { color: colors.textSecondary }, userVote === -1 && styles.activeText]}>{downCount}</Text>
