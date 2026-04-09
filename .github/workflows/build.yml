@@ -38,10 +38,12 @@ jobs:
 
       - name: Install dependencies
         working-directory: app
-        run: npm install
+        run: |
+          # Ensuring root node_modules don't interfere
+          rm -rf ../node_modules
+          npm install
 
-      - name: Build Android AAB (Full Debug Mode)
-        working-directory: app
+      - name: Build Android AAB (Isolated App Path)
         env:
           NODE_OPTIONS: "--max-old-space-size=6144"
           GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx6144m -XX:MaxMetaspaceSize=1024m"
@@ -49,8 +51,8 @@ jobs:
           DEBUG: "eas*"
           EAS_BUILD_NO_EXPO_GO_WARNING: "true"
         run: |
-          # Running with EAS CLI local build, making sure it shows all output
-          npx eas-cli build --platform android --profile production --local --non-interactive --clear-cache --output=./uljip_check_v2.aab
+          # Explicitly pointing to the app directory to avoid root-level interference
+          npx eas-cli build --platform android --profile production --local --non-interactive --clear-cache --path app --output=app/uljip_check_v2.aab
 
       - name: Upload Logs on Failure
         if: failure()
