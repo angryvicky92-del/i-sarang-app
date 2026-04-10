@@ -1,6 +1,6 @@
 import React from 'react';
-import { TouchableOpacity, Text, ActivityIndicator, StyleSheet } from 'react-native';
-import { ChevronLeft } from 'lucide-react-native';
+import { TouchableOpacity, Text, ActivityIndicator, StyleSheet, View } from 'react-native';
+import { X } from 'lucide-react-native';
 import { HorizontalBox } from '@/design/layout/Box';
 
 interface CommunityWriteHeaderProps {
@@ -20,24 +20,28 @@ export const CommunityWriteHeader: React.FC<CommunityWriteHeaderProps> = ({
   submitting, 
   canSubmit,
   colors,
-  headerHeight = 60
+  headerHeight = 56 // Slightly slimmer header
 }) => {
+  const isDark = true; // Forcing dark style to match screenshot
+  const headerBg = '#1a1f2e'; // Exact dark navy from screenshot
+  const submitGreen = '#67c23a'; // Exact green from screenshot
+
   return (
     <HorizontalBox 
-      style={[styles.header, { height: headerHeight, backgroundColor: colors.background, borderBottomColor: colors.border }]}
+      style={[styles.header, { height: headerHeight, backgroundColor: headerBg, borderBottomColor: '#2d3343' }]}
       justifyContent="space-between"
-      paddingHorizontal={16}
+      paddingHorizontal={12}
     >
       <TouchableOpacity 
         onPress={onBack} 
         style={styles.backBtn}
-        accessibilityLabel="뒤로 가기"
+        accessibilityLabel="닫기"
       >
-        <ChevronLeft size={24} color={colors.text} />
+        <X size={24} color="#fff" strokeWidth={2.5} />
       </TouchableOpacity>
       
-      <Text style={[styles.headerTitle, { color: colors.text }]}>
-        {title}
+      <Text style={[styles.headerTitle, { color: '#fff' }]}>
+        {title === '글 수정' ? '수정' : '글쓰기'}
       </Text>
       
       <TouchableOpacity 
@@ -45,9 +49,9 @@ export const CommunityWriteHeader: React.FC<CommunityWriteHeaderProps> = ({
         disabled={submitting || !canSubmit} 
         style={[
           styles.submitBtn, 
-          { backgroundColor: canSubmit ? colors.primary : colors.border }
+          { backgroundColor: canSubmit ? submitGreen : '#2d3343' }
         ]}
-        accessibilityLabel="등록"
+        accessibilityLabel={title.includes('수정') ? '수정' : '등록'}
       >
         {submitting ? (
           <ActivityIndicator size="small" color="#fff" />
@@ -62,9 +66,15 @@ export const CommunityWriteHeader: React.FC<CommunityWriteHeaderProps> = ({
 };
 
 const styles = StyleSheet.create({
-  header: { borderBottomWidth: 0.5 },
+  header: { borderBottomWidth: 0.2 },
   backBtn: { padding: 4 },
-  headerTitle: { fontSize: 17, fontWeight: '800', letterSpacing: -0.5 },
-  submitBtn: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 },
+  headerTitle: { fontSize: 18, fontWeight: '700', letterSpacing: -0.5 },
+  submitBtn: { 
+    paddingHorizontal: 14, 
+    paddingVertical: 5, 
+    borderRadius: 100, // Perfectly round for capsule look
+    minWidth: 54,
+    alignItems: 'center'
+  },
   submitBtnText: { color: '#fff', fontSize: 14, fontWeight: '700' },
 });

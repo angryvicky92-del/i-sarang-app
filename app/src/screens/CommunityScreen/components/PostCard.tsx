@@ -15,26 +15,19 @@ export const PostCard: React.FC<PostCardProps> = ({ post, onPress, colors }) => 
       onPress={onPress} 
       style={[styles.postCard, { backgroundColor: colors.card, borderBottomColor: colors.border }]}
     >
-      <VerticalBox gap={12}>
-        <HorizontalBox justifyContent="space-between">
-          <HorizontalBox gap={8}>
-            {post.is_notice && (
-              <VerticalBox style={[styles.noticeChip, { backgroundColor: colors.primary }]}>
-                <Text style={styles.noticeText}>공지</Text>
-              </VerticalBox>
-            )}
-            <Text style={[styles.author, { color: colors.textMuted }]}>{post.author}</Text>
-          </HorizontalBox>
-          <Text style={[styles.date, { color: colors.textMuted }]}>
-            {new Date(post.created_at).toLocaleDateString()}
-          </Text>
-        </HorizontalBox>
-
+      <VerticalBox gap={8}>
         <HorizontalBox gap={16} alignItems="flex-start">
           <VerticalBox flex={1} gap={4}>
-            <Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>{post.title}</Text>
+            <HorizontalBox gap={8} alignItems="center" style={{ marginBottom: 4 }}>
+              {post.is_notice && (
+                <VerticalBox style={[styles.noticeChip, { backgroundColor: colors.primary }]}>
+                  <Text style={styles.noticeText}>공지</Text>
+                </VerticalBox>
+              )}
+              <Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>{post.title}</Text>
+            </HorizontalBox>
             <Text style={[styles.contentPreview, { color: colors.textSecondary }]} numberOfLines={2}>
-              {post.content}
+              {post.content ? post.content.replace(/<[^>]*>?/gm, '').trim() : ''}
             </Text>
           </VerticalBox>
           {post.image_url && (
@@ -45,12 +38,29 @@ export const PostCard: React.FC<PostCardProps> = ({ post, onPress, colors }) => 
           )}
         </HorizontalBox>
 
-        <HorizontalBox gap={16}>
-          <HorizontalBox gap={4}>
-            <Eye size={14} color={colors.textMuted} />
-            <Text style={[styles.counts, { color: colors.textMuted }]}>{post.views || 0}</Text>
+        <HorizontalBox justifyContent="space-between" alignItems="center">
+          <HorizontalBox gap={6} alignItems="center">
+            <Text style={[styles.metaText, { color: colors.textMuted }]}>{post.author}</Text>
+            <Text style={[styles.metaText, { color: colors.border }]}>|</Text>
+            <Text style={[styles.metaText, { color: colors.textMuted }]}>
+              {new Date(post.created_at).toLocaleDateString()}
+            </Text>
           </HorizontalBox>
-          {/* Add likes/comments count if available */}
+          
+          <HorizontalBox gap={12}>
+            <HorizontalBox gap={3} alignItems="center">
+              <MessageCircle size={14} color={colors.textMuted} />
+              <Text style={[styles.counts, { color: colors.textMuted }]}>{post.comment_count || 0}</Text>
+            </HorizontalBox>
+            <HorizontalBox gap={3} alignItems="center">
+              <Heart size={14} color={colors.textMuted} />
+              <Text style={[styles.counts, { color: colors.textMuted }]}>{post.upvotes || post.likes_count || 0}</Text>
+            </HorizontalBox>
+            <HorizontalBox gap={3} alignItems="center">
+              <Eye size={14} color={colors.textMuted} />
+              <Text style={[styles.counts, { color: colors.textMuted }]}>{post.views || 0}</Text>
+            </HorizontalBox>
+          </HorizontalBox>
         </HorizontalBox>
       </VerticalBox>
     </TouchableOpacity>
@@ -58,13 +68,12 @@ export const PostCard: React.FC<PostCardProps> = ({ post, onPress, colors }) => 
 };
 
 const styles = StyleSheet.create({
-  postCard: { padding: 20, borderBottomWidth: 1 },
+  postCard: { padding: 16, borderBottomWidth: 1 },
   noticeChip: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
   noticeText: { color: '#fff', fontSize: 10, fontWeight: '800' },
-  author: { fontSize: 13, fontWeight: '600' },
-  date: { fontSize: 12 },
-  title: { fontSize: 18, fontWeight: '800', lineHeight: 24 },
+  title: { fontSize: 16, fontWeight: '800', lineHeight: 22, flex: 1 },
   contentPreview: { fontSize: 14, lineHeight: 20 },
-  thumbnail: { width: 60, height: 60, borderRadius: 8 },
+  thumbnail: { width: 64, height: 64, borderRadius: 8 },
+  metaText: { fontSize: 12, fontWeight: '500' },
   counts: { fontSize: 12, fontWeight: '600' }
 });

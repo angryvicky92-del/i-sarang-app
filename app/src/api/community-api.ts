@@ -89,6 +89,26 @@ class CommunityApi {
       .eq('id', commentId);
     if (error) throw error;
   }
+
+  async incrementViewCount(postId: string): Promise<void> {
+    const { error } = await supabase.rpc('increment_post_view', { post_id: postId });
+    
+    // Fallback if RPC is not available
+    if (error) {
+      const { data: currentPost, error: fetchError } = await supabase
+        .from('posts')
+        .select('views')
+        .eq('id', postId)
+        .single();
+      
+      if (!fetchError && currentPost) {
+        await supabase
+          .from('posts')
+          .update({ views: (currentPost.views || 0) + 1 })
+          .eq('id', postId);
+      }
+    }
+  }
 }
 
 export const communityApi = new CommunityApi();

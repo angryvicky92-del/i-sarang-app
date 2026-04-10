@@ -1,3 +1,6 @@
+@import "tailwindcss";
+@import "@tailwindcss/typography";
+
 :root {
   /* Nature Green Palette - Fresh and Trustworthy */
   --primary: #75BA57; /* Fresh Light Green */

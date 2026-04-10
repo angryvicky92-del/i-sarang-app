@@ -1,6 +1,6 @@
 import React from 'react';
 import { TouchableOpacity, Image, Text, StyleSheet } from 'react-native';
-import { Camera, X } from 'lucide-react-native';
+import { Camera, X, Image as ImageIcon } from 'lucide-react-native';
 import { HorizontalBox, VerticalBox } from '@/design/layout/Box';
 
 interface ImageUploadSectionProps {
@@ -17,8 +17,31 @@ export const ImageUploadSection: React.FC<ImageUploadSectionProps> = ({
   colors 
 }) => {
   return (
-    <VerticalBox style={styles.imageSection} margin={40}>
+    <VerticalBox 
+      style={[
+        styles.imageSection, 
+        { backgroundColor: colors.cardSecondary, borderColor: colors.border }
+      ]}
+    >
+      <HorizontalBox style={styles.sectionHeader} gap={8} alignItems="center">
+        <ImageIcon size={18} color={colors.textSecondary} />
+        <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>
+          사진·동영상 {images.length}/10
+        </Text>
+      </HorizontalBox>
+
       <HorizontalBox style={styles.imageGrid} gap={12} flexWrap="wrap">
+        <TouchableOpacity 
+          style={[
+            styles.addBtn, 
+            { backgroundColor: colors.background, borderColor: colors.border }
+          ]} 
+          onPress={onPick}
+          accessibilityLabel="사진 추가"
+        >
+          <X size={24} color={colors.textMuted} style={{ transform: [{ rotate: '45deg' }] }} />
+        </TouchableOpacity>
+
         {images.map((img, index) => (
           <VerticalBox key={index} style={styles.imageWrapper}>
             <Image 
@@ -34,36 +57,29 @@ export const ImageUploadSection: React.FC<ImageUploadSectionProps> = ({
             </TouchableOpacity>
           </VerticalBox>
         ))}
-        {images.length < 10 && (
-          <TouchableOpacity 
-            style={[
-              styles.addBtn, 
-              { backgroundColor: colors.cardSecondary, borderColor: colors.border }
-            ]} 
-            onPress={onPick}
-            accessibilityLabel="사진 추가"
-          >
-            <Camera size={24} color={colors.textMuted} />
-            <Text style={[styles.addBtnText, { color: colors.textMuted }]}>
-              {images.length}/10
-            </Text>
-          </TouchableOpacity>
-        )}
       </HorizontalBox>
     </VerticalBox>
   );
 };
 
 const styles = StyleSheet.create({
-  imageSection: { marginTop: 40 },
+  imageSection: { 
+    marginHorizontal: 16, 
+    marginVertical: 24, 
+    padding: 16, 
+    borderRadius: 16, 
+    borderWidth: 0.5,
+  },
+  sectionHeader: { marginBottom: 16 },
+  sectionTitle: { fontSize: 14, fontWeight: '700' },
   imageGrid: { flexDirection: 'row', flexWrap: 'wrap' },
-  imageWrapper: { width: 80, height: 80, borderRadius: 12, overflow: 'hidden' },
+  imageWrapper: { width: 70, height: 70, borderRadius: 12, overflow: 'hidden' },
   imageItem: { width: '100%', height: '100%' },
   removeImageBtn: { 
     position: 'absolute', 
     top: 4, 
     right: 4, 
-    backgroundColor: 'rgba(0,0,0,0.5)', 
+    backgroundColor: 'rgba(0,0,0,0.6)', 
     width: 20, 
     height: 20, 
     borderRadius: 10, 
@@ -71,13 +87,12 @@ const styles = StyleSheet.create({
     alignItems: 'center' 
   },
   addBtn: { 
-    width: 80, 
-    height: 80, 
+    width: 70, 
+    height: 70, 
     borderRadius: 12, 
-    borderStyle: 'dashed', 
     justifyContent: 'center', 
     alignItems: 'center', 
-    borderWidth: 1.5 
+    borderWidth: 1,
+    borderStyle: 'dashed',
   },
-  addBtnText: { fontSize: 10, fontWeight: '600', marginTop: 2 }
 });

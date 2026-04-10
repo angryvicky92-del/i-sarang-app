@@ -11,6 +11,7 @@ import Home from './pages/Home'
 import AdminApproval from './pages/AdminApproval'
 import Login from './pages/Login'
 import Signup from './pages/Signup'
+import EditorTest from './pages/EditorTest'
 
 import { SearchProvider } from './contexts/SearchContext'
 
@@ -36,6 +37,7 @@ function App() {
             <Route path="/signup" element={<Signup />} />
             <Route path="/mypage" element={<MyPage />} />
             <Route path="/admin/approval" element={<AdminApproval />} />
+            <Route path="/editor-test" element={<EditorTest />} />
           </Routes>
         </main>
         {!hideLayout && <Navbar />}

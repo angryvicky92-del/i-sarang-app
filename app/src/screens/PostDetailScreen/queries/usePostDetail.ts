@@ -34,3 +34,14 @@ export const useCreateComment = () => {
     },
   });
 };
+export const useUpdatePost = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ postId, postData }: { postId: string; postData: any }) => 
+      communityApi.updatePost(postId, postData),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['post', variables.postId] });
+      queryClient.invalidateQueries({ queryKey: ['posts'] });
+    },
+  });
+};

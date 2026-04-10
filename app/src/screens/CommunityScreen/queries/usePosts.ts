@@ -1,9 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/services/supabaseClient';
 
-export const usePosts = (searchQuery: string) => {
+export const usePosts = (searchQuery: string, activeTab: string) => {
   return useQuery({
-    queryKey: ['posts', searchQuery],
+    queryKey: ['posts', searchQuery, activeTab],
     queryFn: async () => {
       let query = supabase
         .from('posts')
@@ -13,6 +13,11 @@ export const usePosts = (searchQuery: string) => {
       
       if (searchQuery) {
         query = query.or(`title.ilike.%${searchQuery}%,content.ilike.%${searchQuery}%`);
+      }
+
+      // POLICY: Notices (is_notice: true) must appear in ALL tabs (All, Free, Teacher).
+      if (activeTab && activeTab !== '전체') {
+        query = query.or(`type.eq.${activeTab},is_notice.eq.true`);
       }
       
       const { data, error } = await query;

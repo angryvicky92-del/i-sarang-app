@@ -5,6 +5,7 @@ import { getCurrentUser } from '../services/authService'
 import { ChevronLeft, ThumbsUp as ThumbsUpIcon, MessageCircle, Send, CheckCircle2, AlertCircle, Trash2, Edit2, Eye, BadgeCheck, Clock, Share2 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import AdBanner from '../components/AdBanner'
+import LexicalEditor from '../components/LexicalEditor/LexicalEditor'
 
 const Toast = ({ message, type, onClose }) => {
   useEffect(() => {
@@ -194,12 +195,12 @@ export default function PostDetail() {
               onChange={e => setEditTitle(e.target.value)}
               placeholder="제목을 입력하세요"
             />
-            <textarea 
-              style={{ padding: '16px', borderRadius: 16, border: '1px solid #E9ECEF', fontSize: '15px', minHeight: 200, outline: 'none', resize: 'none', background: '#F8F9FA', lineHeight: '1.6' }}
-              value={editContent}
-              onChange={e => setEditContent(e.target.value)}
-              placeholder="내용을 입력하세요"
-            />
+            <div className="lexical-editor-container">
+              <LexicalEditor 
+                onChange={(html) => setEditContent(html)} 
+                initialHtml={editContent}
+              />
+            </div>
             <div style={{ display: 'flex', gap: 10 }}>
               <button 
                 onClick={handleUpdatePost}
@@ -262,9 +263,10 @@ export default function PostDetail() {
               )}
             </div>
 
-            <div style={{ fontSize: '16px', lineHeight: '1.8', color: '#444', whiteSpace: 'pre-wrap', marginBottom: 30, fontWeight: '500', minHeight: 100 }}>
-              {post.content}
-            </div>
+            <div 
+              className="rich-text-content prose max-w-none text-base leading-relaxed text-slate-700 font-medium min-h-[100px] mb-[30px]"
+              dangerouslySetInnerHTML={{ __html: post.content }} 
+            />
             
             {post.image_url && (
               <motion.div 

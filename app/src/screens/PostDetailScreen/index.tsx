@@ -1,6 +1,8 @@
-import React, { useState, useCallback, useRef } from 'react';
-import { ScrollView, ActivityIndicator, KeyboardAvoidingView, Platform, Alert, StyleSheet, Text } from 'react-native';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { ScrollView, ActivityIndicator, KeyboardAvoidingView, Platform, Alert, StyleSheet, Text, Image } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as ImagePicker from 'expo-image-picker';
+import * as ImageManipulator from 'expo-image-manipulator';
 import { MessageSquare } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -16,7 +18,9 @@ import { CommentItem } from './components/CommentItem';
 import { StickyCommentInput } from './components/StickyCommentInput';
 
 // Queries
-import { usePostDetail, usePostComments, useDeletePost, useCreateComment } from './queries/usePostDetail';
+import { usePostDetail, usePostComments, useDeletePost, useUpdatePost, useCreateComment } from './queries/usePostDetail';
+import { communityApi } from '@/api/community-api';
+import { uploadPostImages } from '@/services/image-service';
 
 const HEADER_HEIGHT = 60;
 
@@ -37,12 +41,30 @@ export const PostDetailScreen: React.FC<any> = ({ route, navigation }) => {
 
   // Local UI State
   const [newComment, setNewComment] = useState('');
-  const [isEditingPost, setIsEditingPost] = useState(false);
-  const [editTitle, setEditTitle] = useState('');
-  const [editContent, setEditContent] = useState('');
   const [isEditingCommentId, setIsEditingCommentId] = useState<string | null>(null);
   const [editCommentContent, setEditCommentContent] = useState('');
   const [imageAspectRatios, setImageAspectRatios] = useState<Record<string, number>>({});
+
+  // Increment View Count on Mount
+  useEffect(() => {
+    if (postId) {
+      communityApi.incrementViewCount(postId).catch(err => console.warn('View count increment failed:', err));
+    }
+  }, [postId]);
+
+  // Calculate Aspect Ratios for Images
+  useEffect(() => {
+    if (post) {
+      const urls = post.image_urls || (post.image_url ? [post.image_url] : []);
+      urls.forEach((url: string) => {
+        if (!imageAspectRatios[url]) {
+          Image.getSize(url, (width, height) => {
+            setImageAspectRatios(prev => ({ ...prev, [url]: width / height }));
+          }, (err) => console.warn('Failed to get image size:', err));
+        }
+      });
+    }
+  }, [post]);
 
   // Modal State
   const [selectedUser, setSelectedUser] = useState<any>(null);
@@ -72,6 +94,25 @@ export const PostDetailScreen: React.FC<any> = ({ route, navigation }) => {
     });
   };
 
+  const handleDeletePost = () => {
+    Alert.alert(
+      '삭제 확인',
+      '정말로 이 게시글을 삭제하시겠습니까?',
+      [
+        { text: '취소', style: 'cancel' },
+        { 
+          text: '삭제', 
+          style: 'destructive', 
+          onPress: () => {
+            deletePostMutation.mutate(postId, {
+              onSuccess: () => navigation.goBack()
+            });
+          }
+        }
+      ]
+    );
+  };
+
   if (postLoading || !post) {
     return (
       <VerticalBox flex={1} justifyContent="center" alignItems="center" backgroundColor={colors.background}>
@@ -84,13 +125,13 @@ export const PostDetailScreen: React.FC<any> = ({ route, navigation }) => {
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       <PostHeader 
         onBack={() => navigation.goBack()}
-        title={isEditingPost ? '글 수정' : isEditingCommentId ? '댓글 수정' : '상세보기'}
-        isEditingPost={isEditingPost}
+        title={isEditingCommentId ? '댓글 수정' : '상세보기'}
+        isEditingPost={false}
         isOwner={profile?.id === post?.user_id || profile?.user_type === '관리자'}
-        onStartEdit={() => { setEditTitle(post.title); setEditContent(post.content); setIsEditingPost(true); }}
-        onDelete={() => deletePostMutation.mutate(postId)}
-        onSave={() => {/* ... Update logic ... */}}
-        onCancel={() => setIsEditingPost(false)}
+        onStartEdit={() => navigation.navigate('WritePost', { post })}
+        onDelete={handleDeletePost}
+        onSave={() => {}}
+        onCancel={() => {}}
         submitting={deletePostMutation.isPending}
         colors={colors}
       />
@@ -108,14 +149,9 @@ export const PostDetailScreen: React.FC<any> = ({ route, navigation }) => {
         >
           <PostMainContent 
             post={post}
-            isEditing={isEditingPost}
-            editTitle={editTitle}
-            onEditTitleChange={setEditTitle}
-            editContent={editContent}
-            onEditContentChange={setEditContent}
             imageAspectRatios={imageAspectRatios}
             onNicknameClick={handleNicknameClick}
-            userPostVote={0} // To be implemented with engagement hook
+            userPostVote={0}
             onVoteUpdate={() => {}}
             userId={profile?.id}
             colors={colors}
@@ -153,16 +189,14 @@ export const PostDetailScreen: React.FC<any> = ({ route, navigation }) => {
           </VerticalBox>
         </ScrollView>
 
-        {!isEditingPost && (
-          <StickyCommentInput 
-            value={newComment}
-            onChange={setNewComment}
-            onSubmit={handleAddComment}
-            submitting={createCommentMutation.isPending}
-            colors={colors}
-            insets={insets}
-          />
-        )}
+        <StickyCommentInput 
+          value={newComment}
+          onChange={setNewComment}
+          onSubmit={handleAddComment}
+          submitting={createCommentMutation.isPending}
+          colors={colors}
+          insets={insets}
+        />
       </KeyboardAvoidingView>
 
       <UserActionModal

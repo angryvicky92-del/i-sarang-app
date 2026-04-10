@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { uploadImage } from '../services/communityService'
 import { compressImage } from '../utils/imageUtils'
 import { ImagePlus, X } from 'lucide-react'
+import LexicalEditor from './LexicalEditor/LexicalEditor'
 
 export default function PostModal({ isOpen, onClose, onSubmit, user, activeCategory }) {
   const [title, setTitle] = useState('')
@@ -110,12 +111,13 @@ export default function PostModal({ isOpen, onClose, onSubmit, user, activeCateg
             value={title}
             onChange={e => setTitle(e.target.value)}
           />
-          <textarea 
-            placeholder="따뜻한 이야기를 남겨주세요."
-            style={{ width: '100%', height: 180, border: 'none', fontSize: '16px', resize: 'none', outline: 'none', marginBottom: 10 }}
-            value={content}
-            onChange={e => setContent(e.target.value)}
-          />
+
+          <div style={{ marginBottom: 20 }}>
+            <LexicalEditor 
+              onChange={(html) => setContent(html)} 
+              initialHtml={content}
+            />
+          </div>
 
           {imagePreview ? (
             <div style={{ position: 'relative', marginBottom: 20, display: 'inline-block' }}>

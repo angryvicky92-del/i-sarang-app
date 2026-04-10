@@ -258,7 +258,7 @@ export default function HomeScreen({ navigation }) {
                     <Text style={[styles.popularPostTitle, { color: colors.text }]} numberOfLines={1}>{post.title}</Text>
                     <View style={styles.popularMetaRow}>
                       <Text style={[styles.popularMetaText, { color: colors.textMuted }]}>
-                        {post.profiles?.user_type === '관리자' ? '관리자' : post.category_type || post.type} • {post.author}
+                        {post.profiles?.user_type || post.category_type || post.type} • {post.author}
                       </Text>
                       <View style={styles.popularIconRow}>
                         <MessageSquare size={12} color={colors.textMuted} />
