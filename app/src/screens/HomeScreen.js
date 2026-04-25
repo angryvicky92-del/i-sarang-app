@@ -46,7 +46,6 @@ export default function HomeScreen({ navigation }) {
   const [initialLoadDone, setInitialLoadDone] = useState(false);
   const [lastFetchTime, setLastFetchTime] = useState(0);
 
-  const COOLDOWN = 5 * 60 * 1000; // 5 minutes
 
   const fetchHomeContent = React.useCallback(async (forceLoading = false) => {
     // Only show loading indicator if explicitly forced OR if we have no crucial data

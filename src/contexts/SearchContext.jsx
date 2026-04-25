@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { getDaycares } from '../services/dataService';
 
 const SearchContext = createContext();
@@ -64,12 +64,17 @@ export const SearchProvider = ({ children }) => {
     }
   }, []);
 
-  // Fetch daycares automatically whenever arcode changes
+  // arcode 변경 시에만 fetch (메모이제이션으로 불필요한 재요청 방지)
+  const arcodeRef = useRef(null)
   useEffect(() => {
     if (!region.arcode) return;
+    if (arcodeRef.current === region.arcode) return; // 동일 지역 중복 요청 방지
+    arcodeRef.current = region.arcode;
     setRegion(prev => ({ ...prev, isLoading: true }));
     getDaycares(region.arcode).then(data => {
       setRegion(prev => ({ ...prev, daycares: data, isLoading: false }));
+    }).catch(() => {
+      setRegion(prev => ({ ...prev, isLoading: false }));
     });
   }, [region.arcode]);
 

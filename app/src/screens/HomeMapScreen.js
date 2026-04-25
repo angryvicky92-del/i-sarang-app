@@ -165,6 +165,36 @@ export default function HomeMapScreen({ navigation, route }) {
     return map;
   }, [filteredMapDaycares, mapPlaces]);
 
+  const daycareMarkers = useMemo(() => {
+    if (mapMode !== 'DAYCARE') return [];
+    return filteredMapDaycares.map(dc => ({ 
+      id: dc.id, 
+      lat: dc.lat, 
+      lng: dc.lng, 
+      name: dc.name, 
+      type: dc.type, 
+      color: dc.color, 
+      isFavorite: isFavorited(dc.stcode), 
+      isRecommended: false 
+    }));
+  }, [filteredMapDaycares, mapMode, isFavorited]);
+
+  const placeMarkers = useMemo(() => {
+    if (mapMode !== 'RECOMMENDED') return [];
+    return mapPlaces
+      .filter(rp => rp.isKidsFriendly)
+      .map(rp => ({
+        id: rp.id, 
+        lat: rp.lat, 
+        lng: rp.lng, 
+        name: rp.title, 
+        type: rp.type, 
+        color: PLACE_TYPE_COLORS[rp.type] || PLACE_TYPE_COLORS['장소'], 
+        isFavorite: false, 
+        isRecommended: true
+      }));
+  }, [mapPlaces, mapMode]);
+
   // Use a ref to store the timeout for debounce
   const debounceTimer = useRef(null);
   const loadingTimer = useRef(null);
@@ -282,17 +312,7 @@ export default function HomeMapScreen({ navigation, route }) {
         ref={webviewRef}
         center={region?.center || initialRegion}
         animateTick={region?.animateTick}
-        markers={
-          mapMode === 'DAYCARE' 
-            ? filteredMapDaycares.map(dc => ({ 
-                id: dc.id, lat: dc.lat, lng: dc.lng, name: dc.name, type: dc.type, color: dc.color, isFavorite: isFavorited(dc.stcode), isRecommended: false 
-              }))
-            : mapPlaces
-                .filter(rp => rp.isKidsFriendly)
-                .map(rp => ({
-                  id: rp.id, lat: rp.lat, lng: rp.lng, name: rp.title, type: rp.type, color: PLACE_TYPE_COLORS[rp.type] || PLACE_TYPE_COLORS['장소'], isFavorite: false, isRecommended: true
-                }))
-        }
+        markers={mapMode === 'DAYCARE' ? daycareMarkers : placeMarkers}
         userLocation={userLocation}
         selectedId={selectedDaycare?.id}
         isDarkMode={isDarkMode}

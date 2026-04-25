@@ -204,8 +204,8 @@ export const markMessagesAsRead = async (chatId, userId) => {
     if (error) throw error;
     return true;
   } catch (error) {
-    console.error(`Error marking messages as read (Chat: ${chatId}, User: ${userId})
-    Toast.show({ type: 'error', text1: '오류 안내', text2: '데이터 처리 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.' });:`, error);
+    console.error(`Error marking messages as read (Chat: ${chatId}, User: ${userId}):`, error);
+    Toast.show({ type: 'error', text1: '오류 안내', text2: '데이터 처리 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.' });
     return false;
   }
 };

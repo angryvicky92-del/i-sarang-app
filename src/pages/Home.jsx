@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { getPopularPosts } from '../services/communityService'
 import { getPopularReviews, getRecentReviews } from '../services/reviewService'
-import { getCurrentUser } from '../services/authService'
+import { useAuth } from '../contexts/AuthContext'
 import { Star, ThumbsUp, MessageCircle, ChevronRight, TrendingUp, Award, Clock, Eye, BadgeCheck, Zap } from 'lucide-react'
 import { motion } from 'framer-motion'
 import AdBanner from '../components/AdBanner'
@@ -31,35 +31,34 @@ const StarRatingDisplay = ({ rating, size = 12 }) => {
 
 export default function Home() {
   const navigate = useNavigate()
-  const [user, setUser] = useState(null)
+  const { user, profile, isLoading: authLoading } = useAuth()
   const [popularPosts, setPopularPosts] = useState([])
   const [popularReviews, setPopularReviews] = useState([])
   const [recentReviews, setRecentReviews] = useState([])
   const [loading, setLoading] = useState(true)
 
+  const userType = profile?.user_type || '학부모'
+
   useEffect(() => {
-    fetchData()
-  }, [])
+    // AuthContext가 준비된 후 데이터 fetch
+    if (authLoading) return
+    fetchData(userType)
+  }, [authLoading, userType])
 
-  const fetchData = async () => {
+  const fetchData = async (type) => {
     setLoading(true)
-    const userData = await getCurrentUser()
-    const userType = userData?.profile?.user_type || '학부모'
-    setUser(userData)
-
     const [posts, bestReviews, newReviews] = await Promise.all([
-      getPopularPosts(userType),
-      getPopularReviews(userType),
-      getRecentReviews(userType)
+      getPopularPosts(type),
+      getPopularReviews(type),
+      getRecentReviews(type)
     ])
-
     setPopularPosts(posts)
     setPopularReviews(bestReviews)
     setRecentReviews(newReviews)
     setLoading(false)
   }
 
-  if (loading) {
+  if (authLoading || loading) {
     return (
       <div style={{ padding: 40, textAlign: 'center', color: '#999' }}>
         대시보드 로딩 중...
@@ -67,7 +66,7 @@ export default function Home() {
     )
   }
 
-  const userTypeName = user?.profile?.user_type || '학부모'
+  const userTypeName = profile?.user_type || '학부모'
 
   return (
     <div className="animate-fade" style={{ background: '#FDFBFA', position: 'relative', padding: '0 20px 20px 20px' }}>
@@ -87,7 +86,7 @@ export default function Home() {
             animate={{ opacity: 1, y: 0 }}
             style={{ fontSize: '26px', fontWeight: '800', marginBottom: 10, letterSpacing: '-0.5px' }}
           >
-            {user?.profile?.nickname ? `${user.profile.nickname}님, 반가워요! 👋` : '얼집체크에 오신걸 환영해요'}
+            {profile?.nickname ? `${user.profile.nickname}님, 반가워요! 👋` : '얼집체크에 오신걸 환영해요'}
           </motion.h2>
           <p style={{ opacity: 0.9, fontSize: '15px', fontWeight: '500' }}>
             {userTypeName === '관리자' ? '대시보드에서 전반적인 운영 현황을 관리해보세요.' : `${userTypeName}님을 위해 준비한 오늘의 소식이에요.`}

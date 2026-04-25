@@ -231,22 +231,11 @@ export const getPopularPosts = async (userType = '학부모') => {
 }
 
 export const incrementViewCount = async (id) => {
-  const { data: current } = await supabase
-    .from('posts')
-    .select('views')
-    .eq('id', id)
-    .single()
-  
-  const { data, error } = await supabase
-    .from('posts')
-    .update({ views: (current?.views || 0) + 1 })
-    .eq('id', id)
-    .select()
-    
+  // RPC로 원자적 증가 (2쿼리 → 1쿼리로 최적화)
+  const { error } = await supabase.rpc('increment_post_view', { post_id: id })
   if (error) {
-    console.error('Error incrementing view count:', error)
-    toast.error('오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
-    return null
+    // RPC 없으면 폴백
+    const { data: current } = await supabase.from('posts').select('views').eq('id', id).single()
+    await supabase.from('posts').update({ views: (current?.views || 0) + 1 }).eq('id', id)
   }
-  return data[0]
 }

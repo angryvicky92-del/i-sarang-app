@@ -99,9 +99,18 @@ export default function CenterDetailScreen({ route, navigation }) {
     }
   }, [daycare.stcode, daycare.arcode, daycare.lat]);
 
+  const [isReady, setIsReady] = useState(false);
+
+  useEffect(() => {
+    const task = InteractionManager.runAfterInteractions(() => {
+      setIsReady(true);
+    });
+    return () => task.cancel();
+  }, []);
+
   useLayoutEffect(() => {
     navigation.setOptions({ headerShown: false });
-  }, [navigation, daycare.lat, daycare.lng]);
+  }, [navigation]);
 
   const [activeTab, setActiveTab] = useState('기본정보');
   const [jobOffers, setJobOffers] = useState([]);
@@ -199,7 +208,15 @@ export default function CenterDetailScreen({ route, navigation }) {
 
   const fetchRelatedJobs = useCallback(async () => {
     try {
-      const matched = (allJobs || []).filter(job => isJobMatchingDaycare(job, daycare));
+      if (!allJobs) return;
+      const normalize = (n) => n ? n.replace(/\s/g, '').replace(/\(.*\)/g, '') : '';
+      const dcName = normalize(daycare.name);
+      
+      // Fast name-based pre-filter
+      const potentialJobs = allJobs.filter(job => normalize(job.center_name) === dcName);
+      
+      // Deep match only on name-matches
+      const matched = potentialJobs.filter(job => isJobMatchingDaycare(job, daycare));
       setJobOffers(matched);
     } catch (e) {
       console.warn('Failed to fetch matched jobs', e);
@@ -430,6 +447,59 @@ export default function CenterDetailScreen({ route, navigation }) {
     Linking.openURL(url).catch(err => console.error('Failed to open URL', err));
   };
 
+  const childRows = useMemo(() => {
+    const AGE_RATIOS = { 0: 3, 1: 5, 2: 7, 3: 15, 4: 20, 5: 20 };
+    const MIXED_RATIOS = { infantMixed: 5, toddlerMixed: 15, special: 3 };
+    const totalCap = Number(daycare.capacity || 0);
+    
+    const categories = [
+      ...[0, 1, 2, 3, 4, 5].map(age => ({ key: 'age' + age, ratio: AGE_RATIOS[age] })),
+      { key: 'infantMixed', ratio: MIXED_RATIOS.infantMixed },
+      { key: 'toddlerMixed', ratio: MIXED_RATIOS.toddlerMixed },
+      { key: 'special', ratio: MIXED_RATIOS.special }
+    ];
+
+    const rawWeights = categories.map(cat => (daycare.classBreakdown?.[cat.key] || 0) * cat.ratio);
+    const totalRawWeight = rawWeights.reduce((acc, w) => acc + w, 0);
+    
+    const distributedCaps = categories.map((cat, idx) => {
+      if (totalRawWeight > 0 && totalCap > 0) {
+        return Math.floor((rawWeights[idx] / totalRawWeight) * totalCap);
+      }
+      return 0;
+    });
+
+    if (totalRawWeight > 0 && totalCap > 0) {
+      const distributedSum = distributedCaps.reduce((acc, c) => acc + c, 0);
+      const diff = totalCap - distributedSum;
+      if (diff !== 0) {
+        const maxIdx = rawWeights.indexOf(Math.max(...rawWeights));
+        distributedCaps[maxIdx] += diff;
+      }
+    }
+
+    return [
+      ...[0, 1, 2, 3, 4, 5].map(age => ({
+        label: '만 ' + age + '세',
+        current: daycare.childBreakdown?.[`age${age}`] || 0,
+        capacity: distributedCaps[age] || 0,
+        waitlist: daycare.waitingBreakdown?.[`age${age}`]?.count || 0
+      })),
+      {
+        label: '혼합반',
+        current: (daycare.childBreakdown?.infantMixed || 0) + (daycare.childBreakdown?.toddlerMixed || 0),
+        capacity: (distributedCaps[6] || 0) + (distributedCaps[7] || 0) || 0,
+        waitlist: daycare.waitingBreakdown?.mixed?.count || 0
+      },
+      {
+        label: '특수아동',
+        current: daycare.childBreakdown?.special || 0,
+        capacity: distributedCaps[8] || 0,
+        waitlist: daycare.waitingBreakdown?.special?.count || 0
+      }
+    ];
+  }, [daycare]);
+
   const renderBasicInfo = () => (
     <View style={styles.tabContent}>
       
@@ -452,53 +522,56 @@ export default function CenterDetailScreen({ route, navigation }) {
         <InfoRow label="CCTV 설치" value={`${daycare.cctv || 0}대`} colors={colors} />
 
         {/* Map Section */}
-        <View style={{ marginTop: 16, height: 180, borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: colors.border }}>
-          <WebView
-            originWhitelist={['*']}
-            source={{ html: `
-              <!DOCTYPE html>
-              <html>
-              <head>
-                <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-                <style>
-                  body { margin: 0; padding: 0; background-color: ${colors.background}; }
-                  #map { width: 100%; height: 100vh; }
-                  ${isDarkMode ? `
-                  #map { filter: invert(90%) hue-rotate(180deg) brightness(105%) contrast(90%); }
-                  img[src*="copyright"] { filter: invert(100%) hue-rotate(180deg); }
-                  ` : ''}
-                </style>
-                <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=dc33fe7753b02b59868630ccbfd7b820"></script>
-              </head>
-              <body>
-                <div id="map"></div>
-                <script>
-                  var mapContainer = document.getElementById('map');
-                  var center = new kakao.maps.LatLng(${daycare.lat || 37.5665}, ${daycare.lng || 126.9780});
-                  var mapOption = { center: center, level: 3 };
-                  var map = new kakao.maps.Map(mapContainer, mapOption);
-                  
-                  var color = '${daycare.color || '#75BA57'}';
-                  var svg = '<svg width="32" height="40" viewBox="0 0 32 40" xmlns="http://www.w3.org/2000/svg">' +
-                            '<path d="M16 0C7.163 0 0 7.163 0 16c0 12 16 24 16 24s16-12 16-24c0-8.837-7.163-16-16-16z" fill="' + color + '" stroke="white" stroke-width="2"/>' +
-                            '<circle cx="16" cy="16" r="5" fill="white"/>' +
-                            '</svg>';
-                  var markerImage = new kakao.maps.MarkerImage(
-                      'data:image/svg+xml;base64,' + btoa(svg),
-                      new kakao.maps.Size(32, 40),
-                      { offset: new kakao.maps.Point(16, 40) }
-                  );
+        <View style={{ marginTop: 16, height: 180, borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }}>
+          {!isReady ? (
+            <ActivityIndicator color={colors.primary} />
+          ) : (
+            <WebView
+              originWhitelist={['*']}
+              source={{ html: `
+                <!DOCTYPE html>
+                <html>
+                <head>
+                  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+                  <style>
+                    body { margin: 0; padding: 0; background-color: ${colors.background}; }
+                    #map { width: 100%; height: 100vh; }
+                    ${isDarkMode ? `
+                    #map { filter: invert(90%) hue-rotate(180deg) brightness(105%) contrast(90%); }
+                    img[src*="copyright"] { filter: invert(100%) hue-rotate(180deg); }
+                    ` : ''}
+                  </style>
+                  <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=dc33fe7753b02b59868630ccbfd7b820"></script>
+                </head>
+                <body>
+                  <div id="map"></div>
+                  <script>
+                    var mapContainer = document.getElementById('map');
+                    var center = new kakao.maps.LatLng(${daycare.lat || 37.5665}, ${daycare.lng || 126.9780});
+                    var mapOption = { center: center, level: 3 };
+                    var map = new kakao.maps.Map(mapContainer, mapOption);
+                    
+                    var color = '${daycare.color || '#75BA57'}';
+                    var svg = '<svg width="32" height="40" viewBox="0 0 32 40" xmlns="http://www.w3.org/2000/svg">' +
+                              '<path d="M16 0C7.163 0 0 7.163 0 16c0 12 16 24 16 24s16-12 16-24c0-8.837-7.163-16-16-16z" fill="' + color + '" stroke="white" stroke-width="2"/>' +
+                              '<circle cx="16" cy="16" r="5" fill="white"/>' +
+                              '</svg>';
+                    var markerImage = new kakao.maps.MarkerImage(
+                        'data:image/svg+xml;base64,' + btoa(svg),
+                        new kakao.maps.Size(32, 40),
+                        { offset: new kakao.maps.Point(16, 40) }
+                    );
 
-                  var marker = new kakao.maps.Marker({ position: center, image: markerImage });
-                  marker.setMap(map);
-                  // Interactive map enabled
-                </script>
-              </body>
-              </html>
-            ` }}
-            containerStyle={{ borderRadius: 12 }}
-            scrollEnabled={true}
-          />
+                    var marker = new kakao.maps.Marker({ position: center, image: markerImage });
+                    marker.setMap(map);
+                  </script>
+                </body>
+                </html>
+              ` }}
+              containerStyle={{ borderRadius: 12 }}
+              scrollEnabled={true}
+            />
+          )}
         </View>
         <TouchableOpacity 
           style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background, padding: 12, borderRadius: 8, marginTop: 12, borderWidth: 1, borderColor: colors.border }}
@@ -546,74 +619,17 @@ export default function CenterDetailScreen({ route, navigation }) {
             <Text style={[styles.th, { flex: 1.5, color: colors.textSecondary }]}>현원 / 정원</Text>
             <Text style={[styles.th, { color: colors.textSecondary }]}>대기</Text>
           </View>
-          {(() => {
-            const AGE_RATIOS = { 0: 3, 1: 5, 2: 7, 3: 15, 4: 20, 5: 20 };
-            const MIXED_RATIOS = { infantMixed: 5, toddlerMixed: 15, special: 3 };
-            const totalCap = Number(daycare.capacity || 0);
+          {childRows.map((row, idx) => {
+            if (row.current === 0 && row.waitlist === 0 && !row.label.includes('세')) return null;
             
-            // Calculate raw weights for all possible categories
-            const categories = [
-              ...[0, 1, 2, 3, 4, 5].map(age => ({ key: 'age' + age, ratio: AGE_RATIOS[age], type: 'age' })),
-              { key: 'infantMixed', ratio: MIXED_RATIOS.infantMixed, type: 'mixed' },
-              { key: 'toddlerMixed', ratio: MIXED_RATIOS.toddlerMixed, type: 'mixed' },
-              { key: 'special', ratio: MIXED_RATIOS.special, type: 'special' }
-            ];
-
-            const rawWeights = categories.map(cat => (daycare.classBreakdown[cat.key] || 0) * cat.ratio);
-            const totalRawWeight = rawWeights.reduce((acc, w) => acc + w, 0);
-            
-            // Initial distribution
-            const distributedCaps = categories.map((cat, idx) => {
-              if (totalRawWeight > 0 && totalCap > 0) {
-                return Math.floor((rawWeights[idx] / totalRawWeight) * totalCap);
-              }
-              return 0;
-            });
-
-            // Adjust rounding difference
-            if (totalRawWeight > 0 && totalCap > 0) {
-              const distributedSum = distributedCaps.reduce((acc, c) => acc + c, 0);
-              const diff = totalCap - distributedSum;
-              if (diff !== 0) {
-                // Add remainder to the category with the largest weight
-                const maxIdx = rawWeights.indexOf(Math.max(...rawWeights));
-                distributedCaps[maxIdx] += diff;
-              }
-            }
-
-            const rows = [
-              ...[0, 1, 2, 3, 4, 5].map(age => ({
-                label: '만 ' + age + '세',
-                current: daycare.childBreakdown['age' + age] || 0,
-                capacity: distributedCaps[age] || '-',
-                waitlist: daycare.waitingBreakdown['age' + age]?.count || 0
-              })),
-              {
-                label: '혼합반',
-                current: (daycare.childBreakdown.infantMixed || 0) + (daycare.childBreakdown.toddlerMixed || 0),
-                capacity: (distributedCaps[6] || 0) + (distributedCaps[7] || 0) || '-',
-                waitlist: daycare.waitingBreakdown.mixed?.count || 0
-              },
-              {
-                label: '특수아동',
-                current: daycare.childBreakdown.special || 0,
-                capacity: distributedCaps[8] || '-',
-                waitlist: daycare.waitingBreakdown.special?.count || 0
-              }
-            ];
-
-            return rows.map((row, idx) => {
-              if (row.current === 0 && row.waitlist === 0 && !row.label.includes('세')) return null;
-              
-              return (
-                <View key={idx} style={[styles.tableRow, { borderBottomColor: colors.border }]}>
-                  <Text style={[styles.td, { color: colors.textMuted }]}>{row.label}</Text>
-                  <Text style={[styles.td, { flex: 1.5, color: colors.text }]}>{row.current} / {row.capacity === 0 ? '-' : row.capacity}</Text>
-                  <Text style={[styles.td, { color: colors.text }]}>{row.waitlist}명</Text>
-                </View>
-              );
-            });
-          })()}
+            return (
+              <View key={idx} style={[styles.tableRow, { borderBottomColor: colors.border }]}>
+                <Text style={[styles.td, { color: colors.textMuted }]}>{row.label}</Text>
+                <Text style={[styles.td, { flex: 1.5, color: colors.text }]}>{row.current} / {row.capacity === 0 ? '-' : row.capacity}</Text>
+                <Text style={[styles.td, { color: colors.text }]}>{row.waitlist}명</Text>
+              </View>
+            );
+          })}
         </View>
       )}
 
@@ -624,16 +640,22 @@ export default function CenterDetailScreen({ route, navigation }) {
         <InfoRow label="교사 1명당 아동수" value={teacherRatio} highlight colors={colors} />
         
         <Text style={[styles.chartTitle, { color: colors.textSecondary }]}>교직원 근속 연수</Text>
-        <PieChart
-          data={tenureData}
-          width={screenWidth - 80}
-          height={160}
-          chartConfig={{ color: (opacity = 1) => `rgba(${isDarkMode ? '255,255,255' : '0,0,0'}, ${opacity})` }}
-          accessor={"population"}
-          backgroundColor={"transparent"}
-          paddingLeft={"0"}
-          absolute
-        />
+        <View style={{ height: 160, justifyContent: 'center', alignItems: 'center' }}>
+          {!isReady ? (
+            <ActivityIndicator color={colors.primary} />
+          ) : (
+            <PieChart
+              data={tenureData}
+              width={screenWidth - 80}
+              height={160}
+              chartConfig={{ color: (opacity = 1) => `rgba(${isDarkMode ? '255,255,255' : '0,0,0'}, ${opacity})` }}
+              accessor={"population"}
+              backgroundColor={"transparent"}
+              paddingLeft={"0"}
+              absolute
+            />
+          )}
+        </View>
       </View>
 
     </View>

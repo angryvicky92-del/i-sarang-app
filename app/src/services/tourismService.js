@@ -1,16 +1,11 @@
 import Toast from 'react-native-toast-message';
 import axios from 'axios';
 
-const TOURISM_API_KEY = '17786a2939036ec9606cb611a87546032109aa3dba9ca7eaefb87793c22b1f51';
+const TOURISM_API_KEY = process.env.EXPO_PUBLIC_TOURISM_API_KEY;
 const BASE_URL = 'https://apis.data.go.kr/B551011/KorService2';
 
 /**
  * Fetch recommended places based on location.
- * @param {number} lat Latitude (mapY)
- * @param {number} lng Longitude (mapX)
- * @param {number} radius Radius in meters (max 20000)
- * @param {string} sido Sido name
- * @param {string|string[]} sigunguList Sigungu name(s)
  */
 export const getRecommendedPlaces = async (lat, lng, radius = 5000, sido = '', sigunguList = '') => {
   try {

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { getPosts, createPost, deletePost } from '../services/communityService'
-import { getCurrentUser } from '../services/authService'
+import { useAuth } from '../contexts/AuthContext'
 import PostModal from '../components/PostModal'
 import { Link, useNavigate } from 'react-router-dom'
 import { CheckCircle2, AlertCircle, Trash2, Eye, BadgeCheck, MessageCircle, ThumbsUp as ThumbsUpIcon } from 'lucide-react'
@@ -32,7 +32,6 @@ export default function Community() {
   const [posts, setPosts] = useState([])
   const [loading, setLoading] = useState(true)
   const [isModalOpen, setIsModalOpen] = useState(false)
-  const [user, setUser] = useState(null)
   const [isCheckingUser, setIsCheckingUser] = useState(true)
   const [toast, setToast] = useState(null)
 
@@ -98,7 +97,7 @@ export default function Community() {
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
       
       {/* 메인 탭 전환 - 관리자이거나 완전히 로그아웃된 상태가 확인된 경우에만 전환 버튼 노출 */}
-      {!isCheckingUser && (user?.profile?.user_type === '관리자' || !user) && (
+      {!isCheckingUser && (profile?.user_type === '관리자' || !user) && (
         <div className="animate-fade-in" style={{ 
           display: 'flex', background: '#F1F3F5', borderRadius: 20, padding: 4, marginBottom: 24,
           boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.05)'
@@ -183,12 +182,12 @@ export default function Community() {
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
                       <h3 style={{ 
                         fontSize: '17px', lineHeight: '1.5', fontWeight: '700', color: '#2D3436',
-                        flex: 1, paddingRight: user?.profile?.user_type === '관리자' ? 40 : 0, 
+                        flex: 1, paddingRight: profile?.user_type === '관리자' ? 40 : 0, 
                         whiteSpace: 'normal', wordBreak: 'break-word', letterSpacing: '-0.3px'
                       }}>
                         {post.title}
                       </h3>
-                      {user?.profile?.user_type === '관리자' && (
+                      {profile?.user_type === '관리자' && (
                         <button 
                           onClick={(e) => handleDeleteQuick(e, post.id)}
                           style={{ border: 'none', background: 'none', color: '#FFDADA', cursor: 'pointer', padding: '4px 8px' }}

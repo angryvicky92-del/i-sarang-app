@@ -1,27 +1,25 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getPendingVerifications, processVerification, getCurrentUser } from '../services/authService'
+import { getPendingVerifications, processVerification } from '../services/authService'
+import { useAuth } from '../contexts/AuthContext'
 import { ChevronLeft, Check, X, ExternalLink, ShieldCheck } from 'lucide-react'
 
 export default function AdminApproval() {
   const navigate = useNavigate()
   const [pendingList, setPendingList] = useState([])
   const [loading, setLoading] = useState(true)
-  const [user, setUser] = useState(null)
+
+  const { user, profile, isLoading: authLoading } = useAuth()
 
   useEffect(() => {
-    const init = async () => {
-      const userData = await getCurrentUser()
-      if (userData?.profile?.user_type !== '관리자') {
-        alert('관리자만 접근 가능합니다.')
-        navigate('/')
-        return
-      }
-      setUser(userData)
-      fetchList()
+    if (authLoading) return
+    if (!user || profile?.user_type !== '관리자') {
+      alert('관리자만 접근 가능합니다.')
+      navigate('/')
+      return
     }
-    init()
-  }, [])
+    fetchList()
+  }, [authLoading, user, profile])
 
   const fetchList = async () => {
     setLoading(true)

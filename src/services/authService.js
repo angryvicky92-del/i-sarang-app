@@ -37,19 +37,28 @@ export const signIn = async ({ email, password }) => {
     email,
     password,
   })
-  if (error) console.error('Error signing in:', error)
-    toast.error('오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
+  if (error) {
+    console.error('Error signing in:', error)
+    toast.error('오류가 발생했습니다. 잠시 후 다시 시도해주세요.')
+  }
   return { data, error }
 }
 
 export const signOut = async () => {
   const { error } = await supabase.auth.signOut()
-  if (error) console.error('Error signing out:', error)
-    toast.error('오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
+  if (error) {
+    console.error('Error signing out:', error)
+    toast.error('오류가 발생했습니다. 잠시 후 다시 시도해주세요.')
+  }
   return { error }
 }
 
+// 세션 내 캐싱 (AuthContext 없이 직접 호출 시 사용)
+let _userCache = null
+supabase.auth.onAuthStateChange(() => { _userCache = null }) // 인증 변경 시 캐시 초기화
+
 export const getCurrentUser = async () => {
+  if (_userCache) return _userCache
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
 
@@ -59,7 +68,8 @@ export const getCurrentUser = async () => {
     .eq('id', user.id)
     .single()
 
-  return { ...user, profile }
+  _userCache = { ...user, profile }
+  return _userCache
 }
 
 export const resetPassword = async (email) => {

@@ -31,6 +31,8 @@ export default function JobDetailScreen({ route, navigation }) {
     if (targetId) {
       fetchJobDetail();
       incrementViewCount();
+    } else {
+      setLoading(false);
     }
   }, [targetId]);
 

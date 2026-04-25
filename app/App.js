@@ -381,8 +381,8 @@ export default function App() {
             </AuthProvider>
           </SettingsProvider>
         </ThemeProvider>
-        <Toast />
-      </SafeAreaProvider>
+        </SafeAreaProvider>
+      <Toast />
     </QueryClientProvider>
   );
 }

@@ -3,7 +3,7 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { Map, Roadview } from 'react-kakao-maps-sdk'
 import { getDaycareById, getDaycareStatus, SIDO_LIST } from '../services/dataService'
 import { getReviews, createReview, toggleReviewLike, deleteReview, updateReview } from '../services/reviewService'
-import { getCurrentUser } from '../services/authService'
+import { useAuth } from '../contexts/AuthContext'
 import { useSearch } from '../contexts/SearchContext'
 import { 
   MapPin, Phone, Users, User, Clock, Briefcase, Bus, AlertTriangle, Loader2, ChevronLeft, Building, 
@@ -172,7 +172,8 @@ export default function CenterDetail() {
   const [isStatusLoading, setIsStatusLoading] = useState(!location.state?.daycare)
   const [reviews, setReviews] = useState([])
   const [loading, setLoading] = useState(!location.state?.daycare)
-  const [user, setUser] = useState(null)
+  const { user, profile } = useAuth()
+  const [_user, setUser] = useState(null) // legacy compat
   const [activeTab, setActiveTab] = useState('기본정보')
   const [rating, setRating] = useState(5)
   const [content, setContent] = useState('')
@@ -214,8 +215,8 @@ export default function CenterDetail() {
   const fetchData = async () => {
     if (!daycare) setLoading(true)
     try {
-      const userData = await getCurrentUser()
-      setUser(userData)
+      // user from AuthContext
+      
       const stcode = daycare?.stcode || id;
       const [daycareData, statusData, reviewData] = await Promise.all([
         getDaycareById(id, region?.arcode),
