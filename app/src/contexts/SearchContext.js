@@ -161,7 +161,7 @@ export const SearchProvider = ({ children }) => {
       .map(dc => String(dc.stcode))
       .filter(id => id && !lastFetchedIds.current.has(id));
       
-    if (newIds.length > 5) { // Small batch for responsiveness
+    if (newIds.length > 20) { // Increased batch size for fewer re-renders
       getBulkReviewAverages(newIds).then(results => {
         if (results && Object.keys(results).length > 0) {
           setDaycareRatings(prev => ({ ...prev, ...results }));
@@ -187,12 +187,16 @@ export const SearchProvider = ({ children }) => {
 
   const hasFetchedJobs = useRef(false);
 
-  // Fetch job counts with full metadata for strict matching
+  // Fetch job counts with minimal data for strict matching
   const fetchJobCounts = async () => {
-    if (hasFetchedJobs.current) return; // Prevent redundant global fetches
+    if (hasFetchedJobs.current) return;
     
     try {
-      const { data } = await supabase.from('job_offers').select('*');
+      // Select ONLY required fields for matching and counting to reduce payload size
+      const { data } = await supabase
+        .from('job_offers')
+        .select('center_name, location, metadata');
+      
       if (data) {
         setAllJobs(data);
         hasFetchedJobs.current = true;
@@ -201,7 +205,9 @@ export const SearchProvider = ({ children }) => {
         const normalize = (name) => name ? name.replace(/\s/g, '').replace(/\(.*\)/g, '') : '';
         data.forEach(job => {
           const norm = normalize(job.center_name);
-          counts[norm] = (counts[norm] || 0) + 1;
+          if (norm) {
+            counts[norm] = (counts[norm] || 0) + 1;
+          }
         });
         setJobCounts(counts);
       }
@@ -211,7 +217,11 @@ export const SearchProvider = ({ children }) => {
   };
 
   useEffect(() => {
-    fetchJobCounts();
+    // Defer non-critical job fetch to allow UI to render first
+    const timer = setTimeout(() => {
+      fetchJobCounts();
+    }, 1000);
+    return () => clearTimeout(timer);
   }, []); // Only once on mount
 
   const resetFilters = () => {
@@ -319,30 +329,38 @@ export const SearchProvider = ({ children }) => {
 
   const isFavorited = (id) => favorites.some(f => f.daycare_id === id);
 
-  const filteredDaycares = useMemo(() => {
+  // Centralized filter function for better performance
+  const applyFilters = (list, filters, jobList, ratings) => {
     const normalize = (name) => name ? name.replace(/\s/g, '').replace(/\(.*\)/g, '') : '';
     const q = normalize(filters.nameQuery || '');
     
-    return region.daycares.filter(dc => {
+    return list.filter(dc => {
       if (q && !normalize(dc.name || '').includes(q)) return false;
       
-      const ratings = daycareRatings[dc.stcode] || { parentAvg: '0.0', teacherAvg: '0.0' };
-      const rating = parseFloat(ratings.parentAvg) || 0;
-      if (rating < filters.minRating) return false;
+      const itemRatings = ratings[dc.stcode] || { parentAvg: '0.0', teacherAvg: '0.0' };
       
-      const tRating = parseFloat(ratings.teacherAvg) || 0;
-      if (tRating < filters.minTeacherRating) return false;
+      if (filters.minRating > 0) {
+        const rating = parseFloat(itemRatings.parentAvg) || 0;
+        if (rating < filters.minRating) return false;
+      }
+      
+      if (filters.minTeacherRating > 0) {
+        const tRating = parseFloat(itemRatings.teacherAvg) || 0;
+        if (tRating < filters.minTeacherRating) return false;
+      }
       
       if (filters.types.length > 0 && !filters.types.includes(dc.type)) return false;
       if (filters.busOnly && (!dc.schoolbus || dc.schoolbus === '미운영')) return false;
-      if (filters.hiringOnly && !allJobs.some(job => isJobMatchingDaycare(job, dc))) return false;
+      
+      if (filters.hiringOnly) {
+        if (!jobList.some(job => isJobMatchingDaycare(job, dc))) return false;
+      }
       
       if (filters.services.length > 0) {
         const daycareServices = (dc.spec || '').split(',').map(s => s.trim());
         if (!filters.services.every(svc => daycareServices.some(ds => ds.includes(svc) || svc.includes(ds)))) return false;
       }
       
-      // Admission Probability (High Admission Probability by Age)
       if (filters.admissionAge !== null) {
         const age = filters.admissionAge;
         const AGE_RATIOS = { 0: 3, 1: 5, 2: 7, 3: 15, 4: 20, 5: 20 };
@@ -375,62 +393,17 @@ export const SearchProvider = ({ children }) => {
       
       return true;
     });
-  }, [region.daycares, filters, allJobs, daycareRatings]);
+  };
 
-  const filteredMapDaycares = useMemo(() => {
-    const normalize = (name) => name ? name.replace(/\s/g, '').replace(/\(.*\)/g, '') : '';
-    const q = normalize(filters.nameQuery || '');
-    
-    return mapDaycares.filter(dc => {
-      if (q && !normalize(dc.name || '').includes(q)) return false;
-      
-      const ratings = daycareRatings[dc.stcode] || { parentAvg: '0.0', teacherAvg: '0.0' };
-      const rating = parseFloat(ratings.parentAvg) || 0;
-      if (rating < filters.minRating) return false;
-      
-      const tRating = parseFloat(ratings.teacherAvg) || 0;
-      if (tRating < filters.minTeacherRating) return false;
-      
-      if (filters.types.length > 0 && !filters.types.includes(dc.type)) return false;
-      if (filters.busOnly && (!dc.schoolbus || dc.schoolbus === '미운영')) return false;
-      if (filters.hiringOnly && !allJobs.some(job => isJobMatchingDaycare(job, dc))) return false;
-      
-      if (filters.services.length > 0) {
-        const daycareServices = (dc.spec || '').split(',').map(s => s.trim());
-        if (!filters.services.every(svc => daycareServices.some(ds => ds.includes(svc) || svc.includes(ds)))) return false;
-      }
+  const filteredDaycares = useMemo(() => 
+    applyFilters(region.daycares, filters, allJobs, daycareRatings), 
+    [region.daycares, filters, allJobs, daycareRatings]
+  );
 
-      // Admission Probability
-      if (filters.admissionAge !== null) {
-        const age = filters.admissionAge;
-        const AGE_RATIOS = { 0: 3, 1: 5, 2: 7, 3: 15, 4: 20, 5: 20 };
-        const MIXED_RATIOS = { infantMixed: 5, toddlerMixed: 15, special: 3 };
-        const totalCap = Number(dc.capacity || 0);
-
-        if (totalCap > 0) {
-          const categories = [
-            ...[0, 1, 2, 3, 4, 5].map(a => ({ key: 'age' + a, ratio: AGE_RATIOS[a] })),
-            { key: 'infantMixed', ratio: MIXED_RATIOS.infantMixed },
-            { key: 'toddlerMixed', ratio: MIXED_RATIOS.toddlerMixed },
-            { key: 'special', ratio: MIXED_RATIOS.special }
-          ];
-          const rawWeights = categories.map(cat => (dc.classBreakdown?.[cat.key] || 0) * cat.ratio);
-          const totalWeight = rawWeights.reduce((acc, w) => acc + w, 0);
-          if (totalWeight > 0) {
-            let ageCap = Math.floor((rawWeights[age] / totalWeight) * totalCap);
-            const distributedSum = categories.reduce((acc, cat, idx) => acc + Math.floor((rawWeights[idx] / totalWeight) * totalCap), 0);
-            const diff = totalCap - distributedSum;
-            const maxIdx = rawWeights.indexOf(Math.max(...rawWeights));
-            if (maxIdx === age) ageCap += diff;
-            const ageCurrent = dc.childBreakdown?.['age' + age] || 0;
-            if (ageCurrent >= ageCap) return false;
-          } else return false;
-        } else return false;
-      }
-      
-      return true;
-    });
-  }, [mapDaycares, filters, allJobs, daycareRatings]);
+  const filteredMapDaycares = useMemo(() => 
+    applyFilters(mapDaycares, filters, allJobs, daycareRatings), 
+    [mapDaycares, filters, allJobs, daycareRatings]
+  );
 
   return (
     <SearchContext.Provider value={{ 

@@ -14,6 +14,10 @@ interface BoxProps extends ViewProps {
   flex?: number;
 }
 
+/**
+ * Box component that handles spacing without relying on the native 'gap' property,
+ * ensuring maximum compatibility across all React Native / Expo versions.
+ */
 export const VerticalBox: React.FC<BoxProps> = ({ 
   children, 
   gap, 
@@ -30,7 +34,6 @@ export const VerticalBox: React.FC<BoxProps> = ({
 }) => {
   const boxStyle: ViewStyle = {
     flexDirection: 'column',
-    gap,
     backgroundColor,
     padding,
     paddingHorizontal,
@@ -43,7 +46,16 @@ export const VerticalBox: React.FC<BoxProps> = ({
 
   return (
     <View style={[boxStyle, style]} {...props}>
-      {children}
+      {React.Children.map(children, (child, index) => {
+        if (!React.isValidElement(child)) return child;
+        if (index === 0 || !gap) return child;
+        
+        // Apply top margin to all children except the first one to simulate gap
+        const existingStyle = (child.props as any).style;
+        return React.cloneElement(child, {
+          style: [existingStyle, { marginTop: gap }]
+        } as any);
+      })}
     </View>
   );
 };
@@ -64,7 +76,6 @@ export const HorizontalBox: React.FC<BoxProps> = ({
 }) => {
   const boxStyle: ViewStyle = {
     flexDirection: 'row',
-    gap,
     backgroundColor,
     padding,
     paddingHorizontal,
@@ -77,7 +88,16 @@ export const HorizontalBox: React.FC<BoxProps> = ({
 
   return (
     <View style={[boxStyle, style]} {...props}>
-      {children}
+      {React.Children.map(children, (child, index) => {
+        if (!React.isValidElement(child)) return child;
+        if (index === 0 || !gap) return child;
+        
+        // Apply left margin to all children except the first one to simulate gap
+        const existingStyle = (child.props as any).style;
+        return React.cloneElement(child, {
+          style: [existingStyle, { marginLeft: gap }]
+        } as any);
+      })}
     </View>
   );
 };

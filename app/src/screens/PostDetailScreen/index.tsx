@@ -218,3 +218,5 @@ const styles = StyleSheet.create({
   flex1: { flex: 1 },
   commentsTitle: { fontSize: 18, fontWeight: '800', marginBottom: 24 }
 });
+
+export default PostDetailScreen;

@@ -63,6 +63,13 @@ export default function HomeScreen({ navigation }) {
     }
 
     try {
+      // 1. Instantly hide splash screen if it's the first load
+      // This allows the user to see the KindergartenLoader instead of a frozen splash
+      if (!initialLoadDone) {
+        SplashScreen.hideAsync().catch(() => {});
+        setInitialLoadDone(true);
+      }
+
       const [homeResult, diseaseResult, weatherResult] = await Promise.all([
         getHomeData(profile?.user_type),
         diseaseService.getLatestAdvisories(),
@@ -76,14 +83,6 @@ export default function HomeScreen({ navigation }) {
       console.error('Home content fetch error:', error);
     } finally {
       setLoading(false);
-
-      // Hide splash screen after first successful data load
-      if (!initialLoadDone) {
-        setTimeout(async () => {
-          await SplashScreen.hideAsync().catch(() => {});
-          setInitialLoadDone(true);
-        }, 300);
-      }
     }
   }, [profile?.user_type, initialLoadDone, lastFetchTime, data.recentReviews.length]);
 
