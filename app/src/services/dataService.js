@@ -1,3 +1,4 @@
+import Toast from 'react-native-toast-message';
 import { supabase } from './supabaseClient';
 import { SIGUNGU_LIST } from './sigungu';
 const { DOMParser } = require('xmldom');
@@ -214,7 +215,8 @@ export const getDaycares = async (arcode = '') => {
     // Store in cache
     daycareCache.set(arcode, { data: filteredData, timestamp: Date.now() });
     return filteredData;
-  } catch (e) { console.error('Fetch error 030', e); return []; }
+  } catch (e) { console.error('Fetch error 030', e);
+    Toast.show({ type: 'error', text1: '오류 안내', text2: '데이터 처리 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.' }); return []; }
 };
 
 /**

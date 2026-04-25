@@ -1,3 +1,4 @@
+import Toast from 'react-native-toast-message';
 import { supabase } from './supabaseClient';
 import * as WebBrowser from 'expo-web-browser';
 import * as AuthSession from 'expo-auth-session';
@@ -49,6 +50,7 @@ export const signInWithKakao = async () => {
     return { success: false };
   } catch (error) {
     console.error('Kakao login error:', error);
+    Toast.show({ type: 'error', text1: '오류 안내', text2: '데이터 처리 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.' });
     return { success: false, error };
   }
 };
@@ -93,6 +95,7 @@ export const signInWithGoogle = async () => {
     return { success: false };
   } catch (error) {
     console.error('Google login error:', error);
+    Toast.show({ type: 'error', text1: '오류 안내', text2: '데이터 처리 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.' });
     return { success: false, error };
   }
 };
@@ -177,6 +180,7 @@ export const checkNicknameDuplicate = async (nickname) => {
   
   if (error && error.code !== 'PGRST116') { // PGRST116 is "not found" which is fine
     console.error('Check duplicate error:', error);
+    Toast.show({ type: 'error', text1: '오류 안내', text2: '데이터 처리 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.' });
     return { data: null, error };
   }
   

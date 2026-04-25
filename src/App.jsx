@@ -13,6 +13,7 @@ import Login from './pages/Login'
 import Signup from './pages/Signup'
 import EditorTest from './pages/EditorTest'
 
+import { Toaster } from 'react-hot-toast'
 import { SearchProvider } from './contexts/SearchContext'
 
 function App() {
@@ -41,6 +42,7 @@ function App() {
           </Routes>
         </main>
         {!hideLayout && <Navbar />}
+        <Toaster position="bottom-center" toastOptions={{ style: { zIndex: 9999 } }} />
       </div>
     </SearchProvider>
   )

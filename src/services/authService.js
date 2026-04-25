@@ -1,3 +1,4 @@
+import toast from 'react-hot-toast';
 import { supabase } from './supabaseClient'
 
 export const signUp = async ({ email, password, nickname, userType }) => {
@@ -8,6 +9,7 @@ export const signUp = async ({ email, password, nickname, userType }) => {
 
   if (error) {
     console.error('Error signing up:', error)
+    toast.error('오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
     return { error }
   }
 
@@ -22,6 +24,7 @@ export const signUp = async ({ email, password, nickname, userType }) => {
 
     if (profileError) {
       console.error('Error updating profile:', profileError)
+    toast.error('오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
       return { error: profileError }
     }
   }
@@ -35,12 +38,14 @@ export const signIn = async ({ email, password }) => {
     password,
   })
   if (error) console.error('Error signing in:', error)
+    toast.error('오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
   return { data, error }
 }
 
 export const signOut = async () => {
   const { error } = await supabase.auth.signOut()
   if (error) console.error('Error signing out:', error)
+    toast.error('오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
   return { error }
 }
 

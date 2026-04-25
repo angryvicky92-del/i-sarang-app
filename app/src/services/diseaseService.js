@@ -1,3 +1,4 @@
+import Toast from 'react-native-toast-message';
 import { supabase } from './supabaseClient';
 
 export const diseaseService = {
@@ -18,6 +19,7 @@ export const diseaseService = {
       return data.sort((a, b) => statusOrder[a.status] - statusOrder[b.status]);
     } catch (e) {
       console.error('Error fetching disease advisories:', e.message);
+    Toast.show({ type: 'error', text1: '오류 안내', text2: '데이터 처리 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.' });
       return [];
     }
   }

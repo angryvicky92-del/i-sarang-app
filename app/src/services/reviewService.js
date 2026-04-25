@@ -1,3 +1,4 @@
+import Toast from 'react-native-toast-message';
 import { supabase } from './supabaseClient'
 export const getReviews = async (centerId, userId = null, sortBy = 'newest') => {
   const cid = String(centerId || '').trim();
@@ -27,6 +28,7 @@ export const getReviews = async (centerId, userId = null, sortBy = 'newest') => 
     const { data: fallbackData, error: fallbackError } = await fallbackQuery
     if (fallbackError) {
       console.error('[ReviewService] Fallback fetch also failed:', fallbackError);
+    Toast.show({ type: 'error', text1: '오류 안내', text2: '데이터 처리 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.' });
       return [];
     }
 
@@ -84,6 +86,7 @@ export const createReview = async (review) => {
 
   if (error) {
     console.error('Error creating review:', error)
+    Toast.show({ type: 'error', text1: '오류 안내', text2: '데이터 처리 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.' });
     return null
   }
 
@@ -136,6 +139,7 @@ export const deleteReview = async (id) => {
   
   if (error) {
     console.error('Error deleting review:', error)
+    Toast.show({ type: 'error', text1: '오류 안내', text2: '데이터 처리 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.' });
     return false
   }
   return true
@@ -150,6 +154,7 @@ export const updateReview = async (id, review) => {
   
   if (error) {
     console.error('Error updating review:', error)
+    Toast.show({ type: 'error', text1: '오류 안내', text2: '데이터 처리 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.' });
     return null
   }
   return data[0]
@@ -173,6 +178,7 @@ export const getPopularReviews = async (userType = '학부모') => {
       return fallbackData || []
     }
     console.error('Error fetching popular reviews:', error)
+    Toast.show({ type: 'error', text1: '오류 안내', text2: '데이터 처리 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.' });
     return []
   }
   return data
@@ -196,6 +202,7 @@ export const getRecentReviews = async (userType = '학부모') => {
       return fallbackData || []
     }
     console.error('Error fetching recent reviews:', error)
+    Toast.show({ type: 'error', text1: '오류 안내', text2: '데이터 처리 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.' });
     return []
   }
   return data

@@ -1,3 +1,4 @@
+import Toast from 'react-native-toast-message';
 import { supabase } from './supabaseClient';
 
 const API_KEY = process.env.EXPO_PUBLIC_DATA_PORTAL_KEY;
@@ -44,6 +45,7 @@ export const weatherService = {
 
       if (weatherItems.length === 0 || !pollutionObj.pm10Value) {
         console.error('Public Data API Error:', { weatherJSON, pollutionJSON });
+    Toast.show({ type: 'error', text1: '오류 안내', text2: '데이터 처리 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.' });
         throw new Error('API response invalid');
       }
 
@@ -58,6 +60,7 @@ export const weatherService = {
       return this.processData(weatherItems, pollutionObj);
     } catch (error) {
       console.error('WeatherService Error:', error.message);
+    Toast.show({ type: 'error', text1: '오류 안내', text2: '데이터 처리 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.' });
       return null;
     }
   },

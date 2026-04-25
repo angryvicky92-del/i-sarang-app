@@ -1,3 +1,4 @@
+import Toast from 'react-native-toast-message';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import Constants from 'expo-constants';
@@ -68,6 +69,7 @@ export const registerForPushNotificationsAsync = async (userId) => {
           // We can't do much from the client if RLS is strict, but we shouldn't crash.
         } else {
           console.error('Error saving push token to Supabase:', error.message);
+    Toast.show({ type: 'error', text1: '오류 안내', text2: '데이터 처리 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.' });
         }
       }
     }
@@ -84,6 +86,7 @@ export const registerForPushNotificationsAsync = async (userId) => {
     return token;
   } catch (e) {
     console.error('Error in push notification registration:', e);
+    Toast.show({ type: 'error', text1: '오류 안내', text2: '데이터 처리 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.' });
     return null;
   }
 };
@@ -96,7 +99,9 @@ export const unregisterPushToken = async (userId) => {
             .update({ push_token: null })
             .eq('id', userId);
         if (error) console.error('Error unregistering push token:', error);
+    Toast.show({ type: 'error', text1: '오류 안내', text2: '데이터 처리 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.' });
     } catch (e) {
         console.error('Unregister push token failed', e);
+    Toast.show({ type: 'error', text1: '오류 안내', text2: '데이터 처리 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.' });
     }
 };

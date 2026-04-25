@@ -1,3 +1,4 @@
+import Toast from 'react-native-toast-message';
 import { supabase } from './supabaseClient';
 
 /**
@@ -45,6 +46,7 @@ export const getConversations = async (userId) => {
   } catch (error) {
     if (!error.message?.includes('is_read')) {
       console.error('Error fetching conversations:', error.message);
+    Toast.show({ type: 'error', text1: '오류 안내', text2: '데이터 처리 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.' });
     }
     return [];
   }
@@ -65,6 +67,7 @@ export const getMessages = async (chatId) => {
     return data || [];
   } catch (error) {
     console.error('Error fetching messages:', error.message);
+    Toast.show({ type: 'error', text1: '오류 안내', text2: '데이터 처리 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.' });
     return [];
   }
 };
@@ -94,6 +97,7 @@ export const sendMessage = async (chatId, senderId, content) => {
     return data;
   } catch (error) {
     console.error('Error sending message:', error.message);
+    Toast.show({ type: 'error', text1: '오류 안내', text2: '데이터 처리 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.' });
     return null;
   }
 };
@@ -125,6 +129,7 @@ export const getOrCreateChat = async (user1Id, user2Id) => {
     return newChat.id;
   } catch (error) {
     console.error('Error in getOrCreateChat:', error.message);
+    Toast.show({ type: 'error', text1: '오류 안내', text2: '데이터 처리 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.' });
     return null;
   }
 };
@@ -179,6 +184,7 @@ export const getTotalUnreadCount = async (userId) => {
       return 0;
     }
     console.error('Error fetching total unread count:', error.message);
+    Toast.show({ type: 'error', text1: '오류 안내', text2: '데이터 처리 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.' });
     return 0;
   }
 };
@@ -198,7 +204,8 @@ export const markMessagesAsRead = async (chatId, userId) => {
     if (error) throw error;
     return true;
   } catch (error) {
-    console.error(`Error marking messages as read (Chat: ${chatId}, User: ${userId}):`, error);
+    console.error(`Error marking messages as read (Chat: ${chatId}, User: ${userId})
+    Toast.show({ type: 'error', text1: '오류 안내', text2: '데이터 처리 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.' });:`, error);
     return false;
   }
 };

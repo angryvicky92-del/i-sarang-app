@@ -1,3 +1,4 @@
+import toast from 'react-hot-toast';
 import { supabase } from './supabaseClient'
 
 /**
@@ -27,6 +28,7 @@ export const uploadFile = async (bucket, file, userId) => {
     return { url: data.publicUrl, error: null }
   } catch (error) {
     console.error('Error uploading file:', error)
+    toast.error('오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
     return { url: null, error }
   }
 }

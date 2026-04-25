@@ -1,3 +1,4 @@
+import Toast from 'react-native-toast-message';
 import axios from 'axios';
 
 const TOURISM_API_KEY = '17786a2939036ec9606cb611a87546032109aa3dba9ca7eaefb87793c22b1f51';
@@ -180,6 +181,7 @@ export const getRecommendedPlaces = async (lat, lng, radius = 5000, sido = '', s
     return deduplicated;
   } catch (error) {
     console.error('getRecommendedPlaces error:', error?.response?.data || error.message);
+    Toast.show({ type: 'error', text1: '오류 안내', text2: '데이터 처리 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.' });
     return [];
   }
 };

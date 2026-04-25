@@ -1,3 +1,4 @@
+import toast from 'react-hot-toast';
 import { supabase } from './supabaseClient';
 import { SIGUNGU_LIST } from './sigungu';
 
@@ -114,7 +115,8 @@ export const getDaycares = async (arcode = '') => {
         }
       };
     });
-  } catch (e) { console.error('Fetch error 030', e); return []; }
+  } catch (e) { console.error('Fetch error 030', e);
+    toast.error('오류가 발생했습니다. 잠시 후 다시 시도해주세요.'); return []; }
 };
 
 export const getDaycaresDetailed = async (stcode, arcode) => {

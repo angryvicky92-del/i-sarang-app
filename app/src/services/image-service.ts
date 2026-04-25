@@ -1,3 +1,4 @@
+import Toast from 'react-native-toast-message';
 import { supabase } from './supabaseClient';
 import { decode } from 'base64-arraybuffer';
 
@@ -31,6 +32,7 @@ export const uploadPostImages = async (userId: string, images: any[]): Promise<s
 
       if (error) {
         console.error('Error uploading image:', error);
+    Toast.show({ type: 'error', text1: '오류 안내', text2: '데이터 처리 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.' });
         throw error;
       }
 
@@ -38,6 +40,7 @@ export const uploadPostImages = async (userId: string, images: any[]): Promise<s
       return publicUrlData.publicUrl;
     } catch (err) {
       console.error('Upload failed for one image:', err);
+    Toast.show({ type: 'error', text1: '오류 안내', text2: '데이터 처리 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.' });
       return null;
     }
   });

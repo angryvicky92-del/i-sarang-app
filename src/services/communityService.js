@@ -1,3 +1,4 @@
+import toast from 'react-hot-toast';
 import { supabase } from './supabaseClient'
 
 export const uploadImage = async (file) => {
@@ -14,6 +15,7 @@ export const uploadImage = async (file) => {
 
   if (uploadError) {
     console.error('Error uploading image:', uploadError)
+    toast.error('오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
     throw uploadError
   }
 
@@ -47,6 +49,7 @@ export const getPosts = async (category = '학부모') => {
       return fallbackData
     }
     console.error('Error fetching posts:', error)
+    toast.error('오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
     return []
   }
   return data
@@ -60,6 +63,7 @@ export const createPost = async (post) => {
     
   if (error) {
     console.error('Error creating post:', error)
+    toast.error('오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
     return null
   }
   return data[0]
@@ -73,6 +77,7 @@ export const deletePost = async (id) => {
   
   if (error) {
     console.error('Error deleting post:', error)
+    toast.error('오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
     return false
   }
   return true
@@ -87,6 +92,7 @@ export const updatePost = async (id, post) => {
   
   if (error) {
     console.error('Error updating post:', error)
+    toast.error('오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
     return null
   }
   return data[0]
@@ -110,6 +116,7 @@ export const getPostDetail = async (id) => {
       return fallbackData
     }
     console.error('Error fetching post detail:', error)
+    toast.error('오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
     return null
   }
   return data
@@ -124,6 +131,7 @@ export const likePost = async (id, currentLikes) => {
     
   if (error) {
     console.error('Error liking post:', error)
+    toast.error('오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
     return null
   }
   return data[0]
@@ -147,6 +155,7 @@ export const getComments = async (postId) => {
       return fallbackData
     }
     console.error('Error fetching comments:', error)
+    toast.error('오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
     return []
   }
   return data
@@ -160,6 +169,7 @@ export const createComment = async (comment) => {
     
   if (error) {
     console.error('Error creating comment:', error)
+    toast.error('오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
     return null
   }
   return data[0]
@@ -174,6 +184,7 @@ export const updateComment = async (id, content) => {
   
   if (error) {
     console.error('Error updating comment:', error)
+    toast.error('오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
     return null
   }
   return data[0]
@@ -187,6 +198,7 @@ export const deleteComment = async (id) => {
   
   if (error) {
     console.error('Error deleting comment:', error)
+    toast.error('오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
     return false
   }
   return true
@@ -212,6 +224,7 @@ export const getPopularPosts = async (userType = '학부모') => {
       return fallbackData
     }
     console.error('Error fetching popular posts:', error)
+    toast.error('오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
     return []
   }
   return data
@@ -232,6 +245,7 @@ export const incrementViewCount = async (id) => {
     
   if (error) {
     console.error('Error incrementing view count:', error)
+    toast.error('오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
     return null
   }
   return data[0]

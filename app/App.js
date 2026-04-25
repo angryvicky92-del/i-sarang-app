@@ -1,5 +1,6 @@
 import 'react-native-url-polyfill/auto';
 import React from 'react';
+import Toast from 'react-native-toast-message';
 import { TouchableOpacity, View, Image, Text, Platform, NativeModules } from 'react-native';
 import { SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-context';
 import { NavigationContainer, DefaultTheme, DarkTheme } from '@react-navigation/native';
@@ -380,6 +381,7 @@ export default function App() {
             </AuthProvider>
           </SettingsProvider>
         </ThemeProvider>
+        <Toast />
       </SafeAreaProvider>
     </QueryClientProvider>
   );

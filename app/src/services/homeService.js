@@ -1,3 +1,4 @@
+import Toast from 'react-native-toast-message';
 import { supabase } from './supabaseClient';
 
 export const getHomeData = async (userType) => {
@@ -145,6 +146,7 @@ export const getHomeData = async (userType) => {
     return result;
   } catch (error) {
     console.error('getHomeData fatal failure:', error);
+    Toast.show({ type: 'error', text1: '오류 안내', text2: '데이터 처리 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.' });
     return result;
   }
 };
