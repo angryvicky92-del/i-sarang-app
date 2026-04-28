@@ -13,54 +13,82 @@ const HomeMap = () => {
   const daycares = region.daycares || [];
   const [selectedId, setSelectedId] = useState(null);
   const [clusterList, setClusterList] = useState(null);
+  const [isSdkLoaded, setIsSdkLoaded] = useState(!!window.kakao?.maps);
+  const [isMapReady, setIsMapReady] = useState(false);
+
+  useEffect(() => {
+    const handleSdkReady = () => setIsSdkLoaded(true);
+    window.addEventListener('kakaoMapReady', handleSdkReady);
+    return () => window.removeEventListener('kakaoMapReady', handleSdkReady);
+  }, []);
+
+  const center = React.useMemo(() => ({
+    lat: daycares[0]?.lat || region.center?.lat || 37.5665,
+    lng: daycares[0]?.lng || region.center?.lng || 126.9780
+  }), [daycares[0]?.id, region.center?.lat]);
 
   return (
-    <div style={{ width: '100%', height: '100vh', position: 'relative' }}>
-      <Map
-        center={{ lat: daycares[0]?.lat || 37.5665, lng: daycares[0]?.lng || 126.9780 }}
-        style={{ width: '100%', height: 'calc(100vh - 84px)' }}
-        level={6}
-      >
-        <MapTypeControl position={"TOPRIGHT"} />
-        <ZoomControl position={"RIGHT"} />
-        <MarkerClusterer
-          averageCenter={true}
-          minLevel={5} // 클러스터링이 더 자주 일어나게 수정 (기존 10 -> 5)
-          disableClickZoom={true} // 클릭 시 줌인 무시하고 레이어 띄우기
-          styles={[{
-            width: '56px', height: '56px',
-            background: 'var(--primary)',
-            borderRadius: '28px',
-            color: '#fff',
-            textAlign: 'center',
-            fontWeight: '900',
-            fontSize: '16px',
-            lineHeight: '56px',
-            boxShadow: '0 6px 16px rgba(117,186,87,0.4)',
-            border: '3px solid white'
-          }]}
-          onClusterclick={(_, cluster) => {
-            const markers = cluster.getMarkers().map(m => {
-              const id = m.getTitle();
-              return daycares.find(d => d.id === id);
-            }).filter(Boolean);
-            setClusterList(markers);
-          }}
+    <div style={{ width: '100%', height: '100vh', position: 'relative', background: '#F3F4F6' }}>
+      {/* Shimmer Loader */}
+      {(!isSdkLoaded || !isMapReady) && (
+        <div style={{ position: 'absolute', inset: 0, zIndex: 50, display: 'flex', flexDirection: 'column' }}>
+          <div className="animate-pulse bg-gray-200" style={{ width: '100%', height: 'calc(100vh - 84px)' }} />
+          {/* Summary bar skeleton */}
+          <div style={{ position: 'absolute', top: 20, left: 20, right: 20, height: 48, background: 'white', borderRadius: 16, display: 'flex', alignItems: 'center', padding: '0 20px', gap: 10, boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
+            <div className="animate-pulse bg-gray-200 rounded-full" style={{ width: 8, height: 8 }} />
+            <div className="animate-pulse bg-gray-100 rounded-md" style={{ width: '60%', height: 16 }} />
+          </div>
+        </div>
+      )}
+
+      {isSdkLoaded && (
+        <Map
+          center={center}
+          style={{ width: '100%', height: 'calc(100vh - 84px)', visibility: isMapReady ? 'visible' : 'hidden' }}
+          level={6}
+          onCreate={() => setIsMapReady(true)}
         >
-          {daycares.map((daycare, index) => (
-            <MapMarker
-              key={daycare.id || index}
-              position={{ lat: daycare.lat, lng: daycare.lng }}
-              title={daycare.id} // 필수: cluster.getMarkers()에서 id를 찾기 위함
-              image={{
-                src: `/marker_${daycare.type === '국공립' ? 'yellow' : daycare.type === '가정' ? 'orange' : daycare.type === '민간' ? 'green' : daycare.type === '직장' ? 'blue' : 'gray'}.svg`,
-                size: { width: 36, height: 44 }, // 핀 가시성 확보하되 너무 크지 않게 조절
-              }}
-              onClick={() => setSelectedId(daycare.id)}
-            />
-          ))}
-        </MarkerClusterer>
-      </Map>
+          <MapTypeControl position={"TOPRIGHT"} />
+          <ZoomControl position={"RIGHT"} />
+          <MarkerClusterer
+            averageCenter={true}
+            minLevel={5}
+            disableClickZoom={true}
+            styles={[{
+              width: '56px', height: '56px',
+              background: 'var(--primary)',
+              borderRadius: '28px',
+              color: '#fff',
+              textAlign: 'center',
+              fontWeight: '900',
+              fontSize: '16px',
+              lineHeight: '56px',
+              boxShadow: '0 6px 16px rgba(117,186,87,0.4)',
+              border: '3px solid white'
+            }]}
+            onClusterclick={(_, cluster) => {
+              const markers = cluster.getMarkers().map(m => {
+                const id = m.getTitle();
+                return daycares.find(d => d.id === id);
+              }).filter(Boolean);
+              setClusterList(markers);
+            }}
+          >
+            {daycares.map((daycare, index) => (
+              <MapMarker
+                key={daycare.id || index}
+                position={{ lat: daycare.lat, lng: daycare.lng }}
+                title={daycare.id}
+                image={{
+                  src: `/marker_${daycare.type === '국공립' ? 'yellow' : daycare.type === '가정' ? 'orange' : daycare.type === '민간' ? 'green' : daycare.type === '직장' ? 'blue' : 'gray'}.svg`,
+                  size: { width: 36, height: 44 },
+                }}
+                onClick={() => setSelectedId(daycare.id)}
+              />
+            ))}
+          </MarkerClusterer>
+        </Map>
+      )}
 
       {/* 지역 정보 요약바 */}
       {region && (

@@ -59,7 +59,7 @@ export const SearchProvider = ({ children }) => {
         (error) => {
           console.warn("[SearchContext] Geolocation failed:", error.message);
         },
-        { enableHighAccuracy: true, timeout: 5000 }
+        { enableHighAccuracy: false, timeout: 5000 }
       );
     }
   }, []);

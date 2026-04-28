@@ -155,7 +155,7 @@ export default function KakaoMapWebView({ center, animateTick, markers, userLoca
       </style>
       <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=${KAKAO_JS_KEY}&libraries=clusterer"></script>
     </head>
-    <body class="${isDarkMode ? 'dark-mode' : ''}">
+    <body class="">
       <div id="map"></div>
       <script>
         var mapContainer = document.getElementById('map');
@@ -174,8 +174,8 @@ export default function KakaoMapWebView({ center, animateTick, markers, userLoca
         var clusterer = new kakao.maps.MarkerClusterer({
             map: map,
             averageCenter: true,
-            minLevel: 3, // Clustering disabled at zoom levels 1 and 2
-            gridSize: 35, // Reduced grid size to prevent clustering of visually separated markers
+            minLevel: 3, 
+            gridSize: 35, 
             disableClickZoom: true,
             styles: [{ 
                 width : '32px', height : '40px',
@@ -191,9 +191,10 @@ export default function KakaoMapWebView({ center, animateTick, markers, userLoca
         });
 
         var markerCache = {}; 
+        var markerCacheKeys = [];
         var activeMarkers = [];
         var activeOverlays = [];
-        var districtOverlays = []; // For district-level clustering
+        var districtOverlays = [];
         var lastSelectedId = null;
         var userMarker = null;
 
@@ -205,16 +206,14 @@ export default function KakaoMapWebView({ center, animateTick, markers, userLoca
             }
         });
 
-        // 5. Update Clustering Mode (District vs Precision)
         window.updateClusteringMode = function() {
             var level = map.getLevel();
             var markers = activeMarkers;
             
-            // Clear existing district overlays first
             districtOverlays.forEach(function(o) { o.setMap(null); });
             districtOverlays = [];
 
-            if (level >= 7) { // Zoomed out: Show District Summary (Rounded Squares)
+            if (level >= 7) { 
                 clusterer.clear();
                 markers.forEach(function(m) { m.setMap(null); });
                 
@@ -248,7 +247,7 @@ export default function KakaoMapWebView({ center, animateTick, markers, userLoca
                     overlay.setMap(map);
                     districtOverlays.push(overlay);
                 });
-            } else { // Zoomed in: Let Clusterer manage the markers
+            } else { 
                 if (!lastSelectedId) {
                    clusterer.clear(); 
                    clusterer.addMarkers(activeMarkers);
@@ -310,13 +309,11 @@ export default function KakaoMapWebView({ center, animateTick, markers, userLoca
                 labelOverlay.setMap(map);
                 activeOverlays.push(labelOverlay);
 
-                // Offset centering: Position pin at ~30% from top instead of perfectly centered
-                // to avoid being obscured by the bottom sheet/popup
                 try {
                     var proj = map.getProjection();
                     var markerPos = selectedMarker.getPosition();
                     var markerPoint = proj.pointFromCoords(markerPos);
-                    var verticalOffset = map.getHeight() * 0.28; // Increased to push pin higher (closer to top)
+                    var verticalOffset = map.getHeight() * 0.28; 
                     var newCenterPoint = new kakao.maps.Point(markerPoint.x, markerPoint.y + verticalOffset);
                     var newCenterCoords = proj.coordsFromPoint(newCenterPoint);
                     map.panTo(newCenterCoords);
@@ -329,19 +326,14 @@ export default function KakaoMapWebView({ center, animateTick, markers, userLoca
 
         window.updateMarkers = function(daycareList) {
             var newActiveMarkers = [];
-            var idsInPayload = new Set();
             
-            // 1. Explicitly clear MUST happen for all previous markers
             activeMarkers.forEach(function(m) { m.setMap(null); });
-            
-            // 2. Clear standard and district clusters first for a clean update
             clusterer.clear();
             districtOverlays.forEach(function(o) { o.setMap(null); });
             districtOverlays = [];
 
             daycareList.forEach(function(dc) {
                 var id = String(dc.id);
-                idsInPayload.add(id);
                 var latlng = new kakao.maps.LatLng(dc.lat, dc.lng);
                 var color = dc.color || '#3B82F6';
                 var isRecommended = !!dc.isRecommended;
@@ -350,6 +342,12 @@ export default function KakaoMapWebView({ center, animateTick, markers, userLoca
                 var cached = markerCache[id];
                 
                 if (!cached) {
+                    // Memory limit: Evict oldest if cache exceeds 500
+                    if (markerCacheKeys.length > 500) {
+                        var oldestId = markerCacheKeys.shift();
+                        delete markerCache[oldestId];
+                    }
+
                     var innerIcon;
                     if (isRecommended) {
                         innerIcon = '<path transform="translate(6,6) scale(0.8)" d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" fill="#FFF"/>';
@@ -375,7 +373,7 @@ export default function KakaoMapWebView({ center, animateTick, markers, userLoca
                     });
                     marker.daycareId = dc.id;
                     marker.daycareName = dc.name;
-                    marker.district = dc.district; // Store district in marker marker
+                    marker.district = dc.district; 
                     marker.isRecommended = isRecommended;
 
                     kakao.maps.event.addListener(marker, 'click', function() {
@@ -384,6 +382,7 @@ export default function KakaoMapWebView({ center, animateTick, markers, userLoca
 
                     cached = { marker: marker, isFavorite: isFavorite, color: color, isRecommended: isRecommended };
                     markerCache[id] = cached;
+                    markerCacheKeys.push(id);
                 } else if (cached.isFavorite !== isFavorite || cached.color !== color || cached.isRecommended !== isRecommended) {
                     var innerIcon;
                     if (isRecommended) {
@@ -412,7 +411,7 @@ export default function KakaoMapWebView({ center, animateTick, markers, userLoca
             });
 
             activeMarkers = newActiveMarkers;
-            window.updateClusteringMode(); // Evaluate and load markers/clusters based on zoom
+            window.updateClusteringMode(); 
             
             if (lastSelectedId) window.selectMarker(lastSelectedId);
         };
@@ -420,7 +419,7 @@ export default function KakaoMapWebView({ center, animateTick, markers, userLoca
         var lastRegionUpdateTime = 0;
         kakao.maps.event.addListener(map, 'idle', function() {
             var now = Date.now();
-            if (now - lastRegionUpdateTime < 500) return; // Throttle to 500ms
+            if (now - lastRegionUpdateTime < 500) return; 
             lastRegionUpdateTime = now;
 
             var latlng = map.getCenter();
@@ -437,10 +436,8 @@ export default function KakaoMapWebView({ center, animateTick, markers, userLoca
             window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'MAP_PRESS' }));
         });
 
-        // Map is ready!
         window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'READY' }));
         
-        // Send initial region immediately to trigger data fetch
         setTimeout(function() {
             var latlng = map.getCenter();
             var bounds = map.getBounds();
@@ -454,7 +451,7 @@ export default function KakaoMapWebView({ center, animateTick, markers, userLoca
           </script>
     </body>
     </html>
-  `, [isDarkMode]);
+  `, []);
 
   const handleMessage = useCallback((event) => {
     try {
@@ -487,6 +484,8 @@ export default function KakaoMapWebView({ center, animateTick, markers, userLoca
         scrollEnabled={false}
         javaScriptEnabled={true}
         originWhitelist={['*']}
+        cacheEnabled={true}
+        renderToHardwareTextureAndroid={true}
       />
     </View>
   );

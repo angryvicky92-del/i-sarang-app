@@ -5,7 +5,16 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>얼집체크 - 우리 동네 어린이집 똑똑하게 찾기</title>
-    <script type="text/javascript" src="//dapi.kakao.com/v2/maps/sdk.js?appkey=dc33fe7753b02b59868630ccbfd7b820&libraries=services,clusterer"></script>
+    <script async type="text/javascript" src="//dapi.kakao.com/v2/maps/sdk.js?appkey=dc33fe7753b02b59868630ccbfd7b820&libraries=services,clusterer&autoload=false"></script>
+    <script type="text/javascript">
+      window.addEventListener('load', () => {
+        if (window.kakao && window.kakao.maps) {
+          window.kakao.maps.load(() => {
+            window.dispatchEvent(new Event('kakaoMapReady'));
+          });
+        }
+      });
+    </script>
   </head>
   <body>
     <div id="root"></div>
