@@ -367,6 +367,18 @@ export default function App() {
     }
   }, []);
 
+  React.useEffect(() => {
+    // 4-second safety timeout to force-hide SplashScreen in case HomeScreen fails to trigger it
+    const safetyTimer = setTimeout(() => {
+      try {
+        SplashScreen.hideAsync().catch(() => {});
+      } catch (e) {
+        console.warn('Safety SplashScreen hide skipped:', e.message);
+      }
+    }, 4000);
+    return () => clearTimeout(safetyTimer);
+  }, []);
+
   return (
     <QueryClientProvider client={queryClient}>
       <SafeAreaProvider initialMetrics={initialWindowMetrics}>
