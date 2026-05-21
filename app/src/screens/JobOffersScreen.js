@@ -46,7 +46,8 @@ export default function JobOffersScreen({ navigation }) {
     try {
       let query = supabase.from('job_offers').select('*', { count: 'exact' });
 
-      const todayStr = new Date().toISOString().split('T')[0];
+      const kstOffset = 9 * 60 * 60 * 1000;
+      const todayStr = new Date(Date.now() + kstOffset).toISOString().split('T')[0];
       query = query.gte('deadline', todayStr);
 
       if (searchQuery) {

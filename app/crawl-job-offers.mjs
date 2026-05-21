@@ -2,6 +2,8 @@ import { chromium } from 'playwright';
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import path from 'path';
+import { cleanupExpiredJobs } from './cleanup-expired-jobs.mjs';
+
 
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 
@@ -285,6 +287,13 @@ async function crawl() {
 
   await browser.close();
   console.log('Crawling finished.');
+  
+  try {
+    await cleanupExpiredJobs();
+  } catch (cleanupErr) {
+    console.error('Error during auto-cleanup after crawl:', cleanupErr);
+  }
 }
+
 
 crawl();

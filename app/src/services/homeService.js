@@ -122,9 +122,13 @@ export const getHomeData = async (userType) => {
 
     // 3. Fetch Jobs
     try {
+      const kstOffset = 9 * 60 * 60 * 1000;
+      const todayStr = new Date(Date.now() + kstOffset).toISOString().split('T')[0];
+      
       const { data: jobs, error: jobError } = await supabase
         .from('job_offers')
         .select('*')
+        .gte('deadline', todayStr)
         .order('posted_at', { ascending: false })
         .limit(5);
       
