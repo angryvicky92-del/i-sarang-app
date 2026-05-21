@@ -15,10 +15,24 @@ export const getKakaoRegionCode = async (lat, lng) => {
     return kakaoGeoCache.get(cacheKey);
   }
 
+  if (!KAKAO_REST_KEY) {
+    console.warn(
+      '⚠️ [dataService] EXPO_PUBLIC_KAKAO_REST_API_KEY가 누락되었습니다! ' +
+      '서울시 강남구를 기본값으로 사용하여 동작을 유지합니다.'
+    );
+    return { sido: '서울특별시', sigungu: '강남구' };
+  }
+
   try {
     const res = await fetch(`https://dapi.kakao.com/v2/local/geo/coord2regioncode.json?x=${lng}&y=${lat}`, {
       headers: { Authorization: `KakaoAK ${KAKAO_REST_KEY}` }
     });
+    
+    if (res.status === 401) {
+      console.warn('⚠️ [dataService] 카카오 API 인증 실패. 강남구를 기본값으로 대체합니다.');
+      return { sido: '서울특별시', sigungu: '강남구' };
+    }
+    
     const data = await res.json();
     if (data && data.documents && data.documents.length > 0) {
       const doc = data.documents.find(d => d.region_type === 'H') || data.documents[0];
@@ -26,7 +40,10 @@ export const getKakaoRegionCode = async (lat, lng) => {
       kakaoGeoCache.set(cacheKey, result);
       return result;
     }
-  } catch (e) { console.warn('Kakao geocoding fail', e); }
+  } catch (e) { 
+    console.warn('Kakao geocoding fail', e); 
+    return { sido: '서울특별시', sigungu: '강남구' };
+  }
   return null;
 };
 
@@ -88,6 +105,17 @@ export const getDaycares = async (arcode = '') => {
     if (Date.now() - cached.timestamp < CACHE_TTL) {
       return cached.data;
     }
+  }
+
+  if (!API_KEY) {
+    console.warn('⚠️ [dataService] EXPO_PUBLIC_CHILDCARE_API_KEY가 누락되었습니다.');
+    Toast.show({
+      type: 'error',
+      // We will show warning in a non-blocking toast
+      text1: 'API 설정 필요',
+      text2: '어린이집 공공데이터 API 키 설정을 확인해 주세요.'
+    });
+    return [];
   }
 
   try {

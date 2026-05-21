@@ -2,7 +2,7 @@ import React, { useRef, useEffect, useMemo, useState, useCallback } from 'react'
 import { View, StyleSheet } from 'react-native';
 import { WebView } from 'react-native-webview';
 
-const KAKAO_JS_KEY = 'dc33fe7753b02b59868630ccbfd7b820';
+const KAKAO_JS_KEY = process.env.EXPO_PUBLIC_KAKAO_REST_API_KEY || 'dc33fe7753b02b59868630ccbfd7b820';
 
 export default function KakaoMapWebView({ center, animateTick, markers, userLocation, selectedId, isDarkMode, onRegionChange, onMarkerPress, onClusterClick, onMapPress }) {
   const webviewRef = useRef(null);
@@ -478,7 +478,7 @@ export default function KakaoMapWebView({ center, animateTick, markers, userLoca
     <View style={styles.container}>
       <WebView
         ref={webviewRef}
-        source={{ html }}
+        source={{ html, baseUrl: 'http://localhost:5173' }}
         style={styles.webview}
         onMessage={handleMessage}
         scrollEnabled={false}
