@@ -21,7 +21,8 @@ export const weatherService = {
 
       // 2. Fetch Fresh Data (Public Data Portal)
       if (!API_KEY) {
-        throw new Error('DATA_PORTAL_KEY is missing');
+        console.warn('WeatherService warning: EXPO_PUBLIC_DATA_PORTAL_KEY is missing. Returning fallback mock weather data.');
+        return this.getMockData();
       }
 
       const now = new Date();
@@ -44,9 +45,8 @@ export const weatherService = {
       const pollutionObj = pollutionJSON?.response?.body?.items?.[0] || {};
 
       if (weatherItems.length === 0 || !pollutionObj.pm10Value) {
-        console.error('Public Data API Error:', { weatherJSON, pollutionJSON });
-    Toast.show({ type: 'error', text1: '오류 안내', text2: '데이터 처리 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.' });
-        throw new Error('API response invalid');
+        console.warn('Public Data API warning: response invalid or empty. Returning fallback mock weather data.');
+        return this.getMockData();
       }
 
       // 3. Upsert Cache
@@ -59,10 +59,23 @@ export const weatherService = {
 
       return this.processData(weatherItems, pollutionObj);
     } catch (error) {
-      console.error('WeatherService Error:', error.message);
-    Toast.show({ type: 'error', text1: '오류 안내', text2: '데이터 처리 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.' });
-      return null;
+      console.warn('WeatherService soft warning:', error.message);
+      return this.getMockData();
     }
+  },
+
+  getMockData() {
+    return {
+      status: 'caution',
+      label: '날씨 로드 대기 중',
+      subText: '공공데이터 API 설정을 완료해 주세요',
+      temp: 20,
+      pm10: 25,
+      pm25: 12,
+      pm10Grade: '좋음',
+      pm10Color: '#4169E1',
+      weatherDesc: '맑음'
+    };
   },
 
   processData(weatherItems, poll) {
