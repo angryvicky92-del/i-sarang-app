@@ -15,7 +15,7 @@ const Placeholder = ({ text }) => (
   </div>
 );
 
-import { $generateNodesFromHtml } from '@lexical/html';
+import { $generateNodesFromDOM } from '@lexical/html';
 import { $getRoot, $getSelection } from 'lexical';
 
 export default function LexicalEditor({ onChange, initialHtml }) {
@@ -30,7 +30,7 @@ export default function LexicalEditor({ onChange, initialHtml }) {
       if (initialHtml) {
         const parser = new DOMParser();
         const dom = parser.parseFromString(initialHtml, 'text/html');
-        const nodes = $generateNodesFromHtml(editor, dom);
+        const nodes = $generateNodesFromDOM(editor, dom);
         $getRoot().append(...nodes);
       }
     }

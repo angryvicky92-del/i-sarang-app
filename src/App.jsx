@@ -46,6 +46,7 @@ function App() {
                 <Route path="/login"          element={<Login />} />
                 <Route path="/signup"         element={<Signup />} />
                 <Route path="/mypage"         element={<MyPage />} />
+                <Route path="/profile"        element={<MyPage />} />
                 <Route path="/admin/approval" element={<AdminApproval />} />
                 <Route path="/editor-test"    element={<EditorTest />} />
               </Routes>

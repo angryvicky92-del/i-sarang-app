@@ -153,50 +153,63 @@ export default function KakaoMapWebView({ center, animateTick, markers, userLoca
           z-index: 1000;
         }
       </style>
-      <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=${KAKAO_JS_KEY}&libraries=clusterer"></script>
+      <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=${KAKAO_JS_KEY}&libraries=clusterer&autoload=false"></script>
     </head>
     <body class="">
       <div id="map"></div>
       <script>
-        var mapContainer = document.getElementById('map');
-        var mapOption = {
-            center: new kakao.maps.LatLng(${initialCenter?.lat || 37.5665}, ${initialCenter?.lng || 126.9780}),
-            level: 4
-        };
-        var map = new kakao.maps.Map(mapContainer, mapOption);
-        map.setCopyrightPosition(kakao.maps.CopyrightPosition.BOTTOMRIGHT, true);
-        
-        var clusterPinSvg = '<svg width="32" height="40" viewBox="0 0 32 40" xmlns="http://www.w3.org/2000/svg">' +
-            '<path d="M16 0C7.163 0 0 7.163 0 16c0 12 16 24 16 24s16-12 16-24c0-8.837-7.163-16-16-16z" fill="#75BA57" stroke="white" stroke-width="2"/>' +
-            '</svg>';
-        var clusterPinBase64 = 'data:image/svg+xml;base64,' + btoa(clusterPinSvg);
+        window.map = null;
+        window.clusterer = null;
+        window.markerCache = {}; 
+        window.markerCacheKeys = [];
+        window.activeMarkers = [];
+        window.activeOverlays = [];
+        window.districtOverlays = [];
+        window.lastSelectedId = null;
+        window.userMarker = null;
 
-        var clusterer = new kakao.maps.MarkerClusterer({
-            map: map,
-            averageCenter: true,
-            minLevel: 3, 
-            gridSize: 35, 
-            disableClickZoom: true,
-            styles: [{ 
-                width : '32px', height : '40px',
-                background: 'url(' + clusterPinBase64 + ') no-repeat',
-                backgroundSize: '32px 40px',
-                color: '#fff',
-                textAlign: 'center',
-                fontWeight: 'bold',
-                lineHeight: '28px', 
-                fontSize: '14px',
-                textShadow: '0 1px 2px rgba(0,0,0,0.3)'
-            }]
-        });
+        kakao.maps.load(function() {
+          var mapContainer = document.getElementById('map');
+          var mapOption = {
+              center: new kakao.maps.LatLng(${initialCenter?.lat || 37.5665}, ${initialCenter?.lng || 126.9780}),
+              level: 4
+          };
+          window.map = new kakao.maps.Map(mapContainer, mapOption);
+          var map = window.map;
+          map.setCopyrightPosition(kakao.maps.CopyrightPosition.BOTTOMRIGHT, true);
+          
+          var clusterPinSvg = '<svg width="32" height="40" viewBox="0 0 32 40" xmlns="http://www.w3.org/2000/svg">' +
+              '<path d="M16 0C7.163 0 0 7.163 0 16c0 12 16 24 16 24s16-12 16-24c0-8.837-7.163-16-16-16z" fill="#75BA57" stroke="white" stroke-width="2"/>' +
+              '</svg>';
+          var clusterPinBase64 = 'data:image/svg+xml;base64,' + btoa(clusterPinSvg);
 
-        var markerCache = {}; 
-        var markerCacheKeys = [];
-        var activeMarkers = [];
-        var activeOverlays = [];
-        var districtOverlays = [];
-        var lastSelectedId = null;
-        var userMarker = null;
+          window.clusterer = new kakao.maps.MarkerClusterer({
+              map: map,
+              averageCenter: true,
+              minLevel: 3, 
+              gridSize: 35, 
+              disableClickZoom: true,
+              styles: [{ 
+                  width : '32px', height : '40px',
+                  background: 'url(' + clusterPinBase64 + ') no-repeat',
+                  backgroundSize: '32px 40px',
+                  color: '#fff',
+                  textAlign: 'center',
+                  fontWeight: 'bold',
+                  lineHeight: '28px', 
+                  fontSize: '14px',
+                  textShadow: '0 1px 2px rgba(0,0,0,0.3)'
+              }]
+          });
+          var clusterer = window.clusterer;
+
+          var markerCache = window.markerCache; 
+          var markerCacheKeys = window.markerCacheKeys;
+          var activeMarkers = window.activeMarkers;
+          var activeOverlays = window.activeOverlays;
+          var districtOverlays = window.districtOverlays;
+          var lastSelectedId = window.lastSelectedId;
+          var userMarker = window.userMarker;
 
         kakao.maps.event.addListener(clusterer, 'clusterclick', function(cluster) {
             var markers = cluster.getMarkers();
@@ -448,6 +461,7 @@ export default function KakaoMapWebView({ center, animateTick, markers, userLoca
               bounds: { sw: { lat: sw.getLat(), lng: sw.getLng() }, ne: { lat: ne.getLat(), lng: ne.getLng() } }
             }));
         }, 100);
+        });
           </script>
     </body>
     </html>
@@ -478,7 +492,7 @@ export default function KakaoMapWebView({ center, animateTick, markers, userLoca
     <View style={styles.container}>
       <WebView
         ref={webviewRef}
-        source={{ html }}
+        source={{ html, baseUrl: 'http://localhost' }}
         style={styles.webview}
         onMessage={handleMessage}
         scrollEnabled={false}

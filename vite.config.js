@@ -12,13 +12,25 @@ export default defineConfig({
     chunkSizeWarningLimit: 600,
     rollupOptions: {
       output: {
-        // 핵심 라이브러리별 청크 분리 → 캐시 효율 극대화
-        manualChunks: {
-          'vendor-react':    ['react', 'react-dom', 'react-router-dom'],
-          'vendor-supabase': ['@supabase/supabase-js'],
-          'vendor-ui':       ['framer-motion', 'lucide-react', 'react-hot-toast'],
-          'vendor-lexical':  ['lexical', '@lexical/react', '@lexical/html', '@lexical/selection', '@lexical/utils'],
-          'vendor-map':      ['leaflet', 'react-leaflet', 'react-kakao-maps-sdk'],
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('react/') || id.includes('react-dom/') || id.includes('react-router-dom/')) {
+              return 'vendor-react';
+            }
+            if (id.includes('@supabase/')) {
+              return 'vendor-supabase';
+            }
+            if (id.includes('framer-motion') || id.includes('lucide-react') || id.includes('react-hot-toast')) {
+              return 'vendor-ui';
+            }
+            if (id.includes('lexical') || id.includes('@lexical/')) {
+              return 'vendor-lexical';
+            }
+            if (id.includes('leaflet') || id.includes('react-leaflet') || id.includes('react-kakao-maps-sdk')) {
+              return 'vendor-map';
+            }
+            return 'vendor';
+          }
         },
       },
     },

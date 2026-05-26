@@ -161,7 +161,7 @@ export default function MyPage() {
         {[
           { label: '알림 설정' },
           { label: '고객 센터' },
-          ...(user?.profile?.user_type === '관리자' ? [{ label: '선생님 자격 승인', path: '/admin/verify' }] : [])
+          ...(user?.profile?.user_type === '관리자' ? [{ label: '선생님 자격 승인', path: '/admin/approval' }] : [])
         ].map((item, i, arr) => (
           <div 
             key={item.label} 

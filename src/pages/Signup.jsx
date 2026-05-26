@@ -108,8 +108,8 @@ export default function Signup() {
     const { error: signupError } = await signUp(signupData)
     setLoading(false)
 
-    if (error) {
-      showToast(error.message || '가입 중 오류가 발생했습니다.')
+    if (signupError) {
+      showToast(signupError.message || '가입 중 오류가 발생했습니다.')
     } else {
       showToast('회원가입 완료! 인증 이메일을 확인해 주세요.', 'success')
       setTimeout(() => navigate('/login'), 2000)
