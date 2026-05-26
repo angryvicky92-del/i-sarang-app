@@ -22,6 +22,8 @@ import { getOrCreateChat } from '../services/chatService';
 
 const screenWidth = Dimensions.get('window').width;
 
+const KAKAO_KEY = process.env.EXPO_PUBLIC_KAKAO_REST_API_KEY || 'dc33fe7753b02b59868630ccbfd7b820';
+
 const calculateRatio = (children, teachers) => {
   if (!teachers || teachers === 0) return '계산불가';
   const ratio = (children / teachers).toFixed(1);
@@ -541,7 +543,7 @@ export default function CenterDetailScreen({ route, navigation }) {
                     img[src*="copyright"] { filter: invert(100%) hue-rotate(180deg); }
                     ` : ''}
                   </style>
-                  <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=dc33fe7753b02b59868630ccbfd7b820"></script>
+                  <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=${KAKAO_KEY}"></script>
                 </head>
                 <body>
                   <div id="map"></div>
@@ -567,7 +569,7 @@ export default function CenterDetailScreen({ route, navigation }) {
                   </script>
                 </body>
                 </html>
-              ` }}
+              `, baseUrl: 'http://localhost:5173' }}
               containerStyle={{ borderRadius: 12 }}
               scrollEnabled={true}
             />

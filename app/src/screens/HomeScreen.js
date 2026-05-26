@@ -358,8 +358,18 @@ export default function HomeScreen({ navigation }) {
                   </View>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} snapToInterval={width * 0.72} decelerationRate="fast" contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 20, gap: 12 }}>
                   {data.recentJobs.map((job) => {
-                    const dDay = Math.floor((new Date(job.deadline) - new Date()) / (1000 * 60 * 60 * 24));
-                    const dDayColor = dDay <= 3 ? '#EF4444' : (dDay <= 7 ? '#F59E0B' : '#10B981');
+                    const dDay = (() => {
+                      if (!job.deadline) return null;
+                      const kstOffset = 9 * 60 * 60 * 1000;
+                      const todayStr = new Date(Date.now() + kstOffset).toISOString().split('T')[0];
+                      const todayDate = new Date(todayStr);
+                      const deadlineDate = new Date(job.deadline);
+                      const diffTime = deadlineDate - todayDate;
+                      return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                    })();
+                    
+                    const dDayColor = dDay === 0 || dDay <= 3 ? '#EF4444' : (dDay <= 7 ? '#F59E0B' : '#10B981');
+                    const dDayText = dDay === 0 ? 'D-Day' : (dDay < 0 ? '만료' : `D-${dDay}`);
                     
                     return (
                       <TouchableOpacity 
@@ -371,7 +381,7 @@ export default function HomeScreen({ navigation }) {
                           <Text style={[styles.jobCenterName, { color: colors.text }]} numberOfLines={1}>{job.center_name}</Text>
                           {job.deadline && (
                             <View style={[styles.dDayBadge, { backgroundColor: dDayColor + '20' }]}>
-                              <Text style={[styles.dDayText, { color: dDayColor }]}>D-{dDay < 0 ? 'Day' : dDay}</Text>
+                              <Text style={[styles.dDayText, { color: dDayColor }]}>{dDayText}</Text>
                             </View>
                           )}
                         </View>
