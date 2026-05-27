@@ -2,6 +2,7 @@ import Toast from 'react-native-toast-message';
 import { supabase } from './supabaseClient';
 import { SIGUNGU_LIST } from './sigungu';
 const { DOMParser } = require('xmldom');
+const { XMLParser } = require('fast-xml-parser');
 
 const API_KEY = process.env.EXPO_PUBLIC_CHILDCARE_API_KEY;
 const API_URL_030 = 'https://api.childcare.go.kr/mediate/rest/cpmsapi030/cpmsapi030/request';
@@ -124,7 +125,6 @@ export const getDaycares = async (arcode = '') => {
     const xml = await res.text();
     
     // Use fast-xml-parser with manual parsing to preserve leading zeros in stcode
-    const { XMLParser } = require('fast-xml-parser');
     const parser = new XMLParser({ 
         ignoreAttributes: true,
         parseTagValue: false // CRITICAL: Stop auto-conversion to numbers (prevents leading zero loss)
