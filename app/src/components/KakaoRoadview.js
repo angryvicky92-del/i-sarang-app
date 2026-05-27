@@ -3,7 +3,7 @@ import { View, StyleSheet } from 'react-native';
 import { WebView } from 'react-native-webview';
 
 // The Javascript Kakao API key found in the web version's index.html
-const KAKAO_JS_KEY = process.env.EXPO_PUBLIC_KAKAO_REST_API_KEY || 'dc33fe7753b02b59868630ccbfd7b820';
+const KAKAO_JS_KEY = process.env.EXPO_PUBLIC_KAKAO_JS_KEY || 'dc33fe7753b02b59868630ccbfd7b820';
 
 export default function KakaoRoadview({ lat, lng }) {
   // We use baseUrl 'http://localhost' to bypass Kakao's domain restrictions
