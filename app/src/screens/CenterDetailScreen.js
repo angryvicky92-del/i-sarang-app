@@ -569,7 +569,7 @@ export default function CenterDetailScreen({ route, navigation }) {
                   </script>
                 </body>
                 </html>
-              `, baseUrl: 'https://project-946a273f-869e-48da-a0e.web.app' }}
+              `, baseUrl: 'http://localhost' }}
               containerStyle={{ borderRadius: 12 }}
               scrollEnabled={true}
             />

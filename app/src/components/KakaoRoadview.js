@@ -52,7 +52,7 @@ export default function KakaoRoadview({ lat, lng }) {
     <View style={styles.container}>
       <WebView
         originWhitelist={['*']}
-        source={{ html: htmlContent, baseUrl: 'https://project-946a273f-869e-48da-a0e.web.app' }}
+        source={{ html: htmlContent, baseUrl: 'http://localhost' }}
         style={styles.webview}
         scrollEnabled={false}
         bounces={false}
