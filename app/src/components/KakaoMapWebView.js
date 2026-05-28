@@ -492,7 +492,7 @@ export default function KakaoMapWebView({ center, animateTick, markers, userLoca
     <View style={styles.container}>
       <WebView
         ref={webviewRef}
-        source={{ html, baseUrl: 'http://localhost:5173' }}
+        source={{ html, baseUrl: 'https://project-946a273f-869e-48da-a0e.web.app' }}
         style={styles.webview}
         onMessage={handleMessage}
         scrollEnabled={false}

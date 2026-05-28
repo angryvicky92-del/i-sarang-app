@@ -3,7 +3,7 @@
     "name": "얼집체크",
     "slug": "uljip-check",
     "scheme": "app",
-    "version": "1.0.16",
+    "version": "1.0.17",
     "orientation": "portrait",
     "icon": "./assets/custom_icon.png",
     "userInterfaceStyle": "light",
@@ -15,14 +15,14 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.uljipcheck.app",
-      "buildNumber": "16",
+      "buildNumber": "17",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
       "package": "com.uljipcheck.app",
-      "versionCode": 16,
+      "versionCode": 17,
       "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
         "backgroundColor": "#ffffff",
