@@ -497,6 +497,10 @@ export default function KakaoMapWebView({ center, animateTick, markers, userLoca
         onMessage={handleMessage}
         scrollEnabled={false}
         javaScriptEnabled={true}
+        domStorageEnabled={true}
+        mixedContentMode="always"
+        allowFileAccess={true}
+        allowUniversalAccessFromFileURLs={true}
         originWhitelist={['*']}
         cacheEnabled={true}
         renderToHardwareTextureAndroid={true}

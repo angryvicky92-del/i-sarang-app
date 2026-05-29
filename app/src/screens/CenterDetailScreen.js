@@ -530,6 +530,11 @@ export default function CenterDetailScreen({ route, navigation }) {
           ) : (
             <WebView
               originWhitelist={['*']}
+              javaScriptEnabled={true}
+              domStorageEnabled={true}
+              mixedContentMode="always"
+              allowFileAccess={true}
+              allowUniversalAccessFromFileURLs={true}
               source={{ html: `
                 <!DOCTYPE html>
                 <html>

@@ -56,6 +56,11 @@ export default function KakaoRoadview({ lat, lng }) {
         style={styles.webview}
         scrollEnabled={false}
         bounces={false}
+        javaScriptEnabled={true}
+        domStorageEnabled={true}
+        mixedContentMode="always"
+        allowFileAccess={true}
+        allowUniversalAccessFromFileURLs={true}
         pointerEvents="auto"
       />
     </View>
