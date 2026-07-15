@@ -4,7 +4,6 @@
   <meta charset="UTF-8">
   <title>어린이집 체크 - 관리자 페이지</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body class="bg-gray-100 min-h-screen">
   <div id="login-container" class="min-h-screen flex items-center justify-center">
@@ -38,11 +37,13 @@
     <div id="list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
   </div>
 
-  <script>
+  <script type="module">
+    import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
+    
     // Supabase 설정
     const SUPABASE_URL = 'https://fyoballvcwavhrwkprnx.supabase.co';
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ5b2JhbGx2Y3dhdmhyd2twcm54Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM0OTAxOTcsImV4cCI6MjA4OTA2NjE5N30.o3676dn-BzOxbGbZXAYCaTe4xgVBoyilVUZymDXXb6c';
-    const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     const loginContainer = document.getElementById('login-container');
     const dashboardContainer = document.getElementById('dashboard-container');
