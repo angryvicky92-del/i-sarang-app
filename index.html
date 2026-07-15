@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>어린이집 체크 - 관리자 페이지</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body class="bg-gray-100 min-h-screen">
+  <div id="login-container" class="min-h-screen flex items-center justify-center">
+    <div class="bg-white p-8 rounded-xl shadow-lg w-full max-w-md">
+      <h1 class="text-2xl font-bold mb-6 text-center text-gray-800">관리자 로그인</h1>
+      <form id="login-form" class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700">이메일</label>
+          <input type="email" id="email" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700">비밀번호</label>
+          <input type="password" id="password" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500">
+        </div>
+        <button type="submit" class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
+          로그인
+        </button>
+      </form>
+      <div id="login-error" class="mt-4 text-red-600 text-sm hidden text-center"></div>
+    </div>
+  </div>
+
+  <div id="dashboard-container" class="hidden max-w-5xl mx-auto p-8">
+    <div class="flex justify-between items-center mb-8">
+      <h1 class="text-3xl font-bold text-gray-800">선생님 자격 승인 관리</h1>
+      <button id="logout-btn" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-4 rounded shadow">
+        로그아웃
+      </button>
+    </div>
+    <div id="loading" class="text-gray-500 text-center py-10 hidden">데이터를 불러오는 중입니다...</div>
+    <div id="list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+  </div>
+
+  <script>
+    // Supabase 설정
+    const SUPABASE_URL = 'https://fyoballvcwavhrwkprnx.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ5b2JhbGx2Y3dhdmhyd2twcm54Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM0OTAxOTcsImV4cCI6MjA4OTA2NjE5N30.o3676dn-BzOxbGbZXAYCaTe4xgVBoyilVUZymDXXb6c';
+    const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    const loginContainer = document.getElementById('login-container');
+    const dashboardContainer = document.getElementById('dashboard-container');
+    const loginForm = document.getElementById('login-form');
+    const loginError = document.getElementById('login-error');
+    const logoutBtn = document.getElementById('logout-btn');
+    const loading = document.getElementById('loading');
+    const listEl = document.getElementById('list');
+
+    // 세션 확인
+    async function checkSession() {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        await verifyAdmin(session.user.id);
+      } else {
+        showLogin();
+      }
+    }
+
+    // 관리자 여부 확인
+    async function verifyAdmin(userId) {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('user_type')
+        .eq('id', userId)
+        .single();
+
+      if (error || !data || data.user_type !== '관리자') {
+        alert('관리자 권한이 없습니다.');
+        await supabase.auth.signOut();
+        showLogin();
+      } else {
+        showDashboard();
+      }
+    }
+
+    function showLogin() {
+      loginContainer.classList.remove('hidden');
+      dashboardContainer.classList.add('hidden');
+      loginError.classList.add('hidden');
+    }
+
+    function showDashboard() {
+      loginContainer.classList.add('hidden');
+      dashboardContainer.classList.remove('hidden');
+      fetchPending();
+    }
+
+    // 로그인 폼 제출
+    loginForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
+      
+      loginError.classList.add('hidden');
+      
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      });
+
+      if (error) {
+        loginError.textContent = '로그인 실패: ' + error.message;
+        loginError.classList.remove('hidden');
+      } else {
+        await verifyAdmin(data.user.id);
+      }
+    });
+
+    // 로그아웃
+    logoutBtn.addEventListener('click', async () => {
+      await supabase.auth.signOut();
+      showLogin();
+    });
+
+    // 데이터 불러오기
+    async function fetchPending() {
+      loading.classList.remove('hidden');
+      listEl.innerHTML = '';
+
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('verification_status', 'pending')
+        .eq('user_type', '선생님');
+
+      loading.classList.add('hidden');
+
+      if (error) {
+        alert('데이터를 불러오는데 실패했습니다: ' + error.message);
+        return;
+      }
+
+      if (data.length === 0) {
+        listEl.innerHTML = '<div class="col-span-full text-center text-gray-500 py-10">대기 중인 승인 요청이 없습니다. 🎉</div>';
+        return;
+      }
+
+      data.forEach(user => {
+        const card = document.createElement('div');
+        card.className = 'bg-white rounded-xl shadow-md p-6 flex flex-col';
+        
+        card.innerHTML = `
+          <div class="mb-4">
+            <h2 class="text-xl font-bold text-gray-800">\${user.nickname || '이름 없음'}</h2>
+            <p class="text-xs text-gray-500 mt-1">신청일: \${new Date(user.updated_at).toLocaleString()}</p>
+          </div>
+          <div class="bg-gray-50 flex-1 h-48 mb-6 rounded-lg border border-gray-200 flex items-center justify-center overflow-hidden">
+            \${user.verification_image 
+              ? \`<a href="\${user.verification_image}" target="_blank" class="w-full h-full flex items-center justify-center p-2"><img src="\${user.verification_image}" class="max-w-full max-h-full object-contain hover:scale-105 transition-transform duration-200" title="클릭하여 원본 보기"></a>\`
+              : '<span class="text-gray-400 text-sm">이미지가 없습니다</span>'
+            }
+          </div>
+          <div class="flex gap-3 mt-auto">
+            <button onclick="processRequest('\${user.id}', 'approved')" class="flex-1 bg-green-600 hover:bg-green-700 text-white text-sm font-bold py-2.5 rounded transition shadow-sm">
+              승인
+            </button>
+            <button onclick="processRequest('\${user.id}', 'rejected')" class="flex-1 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 text-sm font-bold py-2.5 rounded transition shadow-sm">
+              거절
+            </button>
+          </div>
+        `;
+        listEl.appendChild(card);
+      });
+    }
+
+    // 승인/거절 처리
+    window.processRequest = async (userId, status) => {
+      if (!confirm(\`정말로 \${status === 'approved' ? '승인' : '거절'} 처리하시겠습니까?\`)) return;
+
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          verification_status: status,
+          is_verified: status === 'approved',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', userId);
+
+      if (error) {
+        alert('오류가 발생했습니다: ' + error.message);
+      } else {
+        alert('처리되었습니다.');
+        fetchPending();
+      }
+    };
+
+    // 초기 실행
+    checkSession();
+  </script>
+</body>
+</html>
