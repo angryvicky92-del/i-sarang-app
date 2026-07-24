@@ -1,8 +1,7 @@
+/* global process */
 import Toast from 'react-native-toast-message';
-import { supabase } from './supabaseClient';
 import { SIGUNGU_LIST } from './sigungu';
-const { DOMParser } = require('xmldom');
-const { XMLParser } = require('fast-xml-parser');
+import { XMLParser } from 'fast-xml-parser';
 
 const API_KEY = process.env.EXPO_PUBLIC_CHILDCARE_API_KEY;
 const API_URL_030 = 'https://api.childcare.go.kr/mediate/rest/cpmsapi030/cpmsapi030/request';
@@ -11,6 +10,8 @@ const KAKAO_REST_KEY = process.env.EXPO_PUBLIC_KAKAO_REST_API_KEY;
 const kakaoGeoCache = new Map();
 
 export const getKakaoRegionCode = async (lat, lng) => {
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+
   const cacheKey = `${lat.toFixed(2)}_${lng.toFixed(2)}`;
   if (kakaoGeoCache.has(cacheKey)) {
     return kakaoGeoCache.get(cacheKey);
@@ -19,9 +20,9 @@ export const getKakaoRegionCode = async (lat, lng) => {
   if (!KAKAO_REST_KEY) {
     console.warn(
       '⚠️ [dataService] EXPO_PUBLIC_KAKAO_REST_API_KEY가 누락되었습니다! ' +
-      '서울시 강남구를 기본값으로 사용하여 동작을 유지합니다.'
+      '좌표 기반 지역 조회를 건너뜁니다.'
     );
-    return { sido: '서울특별시', sigungu: '강남구' };
+    return null;
   }
 
   try {
@@ -29,10 +30,7 @@ export const getKakaoRegionCode = async (lat, lng) => {
       headers: { Authorization: `KakaoAK ${KAKAO_REST_KEY}` }
     });
     
-    if (res.status === 401) {
-      console.warn('⚠️ [dataService] 카카오 API 인증 실패. 강남구를 기본값으로 대체합니다.');
-      return { sido: '서울특별시', sigungu: '강남구' };
-    }
+    if (!res.ok) throw new Error(`Kakao region API HTTP ${res.status}`);
     
     const data = await res.json();
     if (data && data.documents && data.documents.length > 0) {
@@ -43,16 +41,19 @@ export const getKakaoRegionCode = async (lat, lng) => {
     }
   } catch (e) { 
     console.warn('Kakao geocoding fail', e); 
-    return { sido: '서울특별시', sigungu: '강남구' };
+    return null;
   }
   return null;
 };
 
 export const getKakaoAddressCenter = async (address) => {
+  if (!address || !KAKAO_REST_KEY) return null;
+
   try {
     const res = await fetch(`https://dapi.kakao.com/v2/local/search/address.json?query=${encodeURIComponent(address)}`, {
       headers: { Authorization: `KakaoAK ${KAKAO_REST_KEY}` }
     });
+    if (!res.ok) throw new Error(`Kakao address API HTTP ${res.status}`);
     const data = await res.json();
     if (data && data.documents && data.documents.length > 0) {
       return { 
@@ -95,6 +96,7 @@ export const PLACE_TYPE_COLORS = {
 };
 
 const daycareCache = new Map();
+const daycareRequests = new Map();
 const CACHE_TTL = 1000 * 60 * 60 * 24 * 7; // 7 days
 
 export const getDaycares = async (arcode = '') => {
@@ -119,9 +121,13 @@ export const getDaycares = async (arcode = '') => {
     return [];
   }
 
-  try {
+  if (daycareRequests.has(arcode)) return daycareRequests.get(arcode);
+
+  const request = (async () => {
+   try {
     const params = new URLSearchParams({ key: API_KEY, arcode });
     const res = await fetch(`${API_URL_030}?${params.toString()}`);
+    if (!res.ok) throw new Error(`Childcare API HTTP ${res.status}`);
     const xml = await res.text();
     
     // Use fast-xml-parser with manual parsing to preserve leading zeros in stcode
@@ -171,16 +177,18 @@ export const getDaycares = async (arcode = '') => {
         lngOffset = (hashLng - 0.5) * 0.0002;
       }
       
-      const baseLat = parseFloat(g("la")) || 37.5;
-      const baseLng = parseFloat(g("lo")) || 127.0;
+      const baseLat = parseFloat(g("la"));
+      const baseLng = parseFloat(g("lo"));
+      const hasValidCoordinates = Number.isFinite(baseLat) && Number.isFinite(baseLng)
+        && baseLat >= 33 && baseLat <= 39 && baseLng >= 124 && baseLng <= 132;
 
       return {
         id: stcode,
         stcode: stcode,
         name: g("crname") || '\uC815\uBCF4 \uC5C6\uC74C',
         addr: g("craddr"),
-        lat: baseLat + latOffset,
-        lng: baseLng + lngOffset,
+        lat: hasValidCoordinates ? baseLat + latOffset : null,
+        lng: hasValidCoordinates ? baseLng + lngOffset : null,
         type, 
         color: TYPE_COLORS[type] || TYPE_COLORS[TYPE_ETC],
         tel: g("crtelno"),
@@ -245,6 +253,14 @@ export const getDaycares = async (arcode = '') => {
     return filteredData;
   } catch (e) { console.error('Fetch error 030', e);
     Toast.show({ type: 'error', text1: '오류 안내', text2: '데이터 처리 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.' }); return []; }
+  })();
+
+  daycareRequests.set(arcode, request);
+  try {
+    return await request;
+  } finally {
+    daycareRequests.delete(arcode);
+  }
 };
 
 /**
@@ -323,7 +339,7 @@ export const getMultiRegionDaycares = async (points, onProgress = null) => {
   return cachedData;
 };
 
-export const getDaycaresDetailed = async (stcode, arcode) => {
+export const getDaycaresDetailed = async () => {
   // INFO-100 error explicitly halts parsing via 031. Since 030 now serves comprehensive detailed statistics,
   // we do not rely on 031 and just return null here. The main detail page will gracefully fall back to the enriched
   // daycare object properties derived directly from getDaycares().

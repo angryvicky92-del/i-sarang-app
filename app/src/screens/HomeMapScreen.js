@@ -167,16 +167,19 @@ export default function HomeMapScreen({ navigation, route }) {
 
   const daycareMarkers = useMemo(() => {
     if (mapMode !== 'DAYCARE') return [];
-    return filteredMapDaycares.map(dc => ({ 
+    return filteredMapDaycares
+      .filter(dc => Number.isFinite(dc.lat) && Number.isFinite(dc.lng))
+      .map(dc => ({
       id: dc.id, 
       lat: dc.lat, 
       lng: dc.lng, 
       name: dc.name, 
+      district: dc.office || dc.addr?.split(' ')[1] || '',
       type: dc.type, 
       color: dc.color, 
       isFavorite: isFavorited(dc.stcode), 
       isRecommended: false 
-    }));
+      }));
   }, [filteredMapDaycares, mapMode, isFavorited]);
 
   const placeMarkers = useMemo(() => {
@@ -198,6 +201,11 @@ export default function HomeMapScreen({ navigation, route }) {
   // Use a ref to store the timeout for debounce
   const debounceTimer = useRef(null);
   const loadingTimer = useRef(null);
+
+  useEffect(() => () => {
+    if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    if (loadingTimer.current) clearTimeout(loadingTimer.current);
+  }, []);
 
   const handleRegionChange = useCallback(async (newRegion) => {
     // Clear existing timers

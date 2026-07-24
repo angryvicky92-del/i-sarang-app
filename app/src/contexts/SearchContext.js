@@ -119,6 +119,8 @@ export const SearchProvider = ({ children }) => {
   // Fetch daycares automatically whenever arcode changes
   useEffect(() => {
     if (!region.arcode || region.isManual) return;
+    const requestedArcode = region.arcode;
+    let cancelled = false;
     
     // 1. Check synchronous cache first for instant UI response
     const cachedData = getCachedDaycares(region.arcode);
@@ -129,8 +131,11 @@ export const SearchProvider = ({ children }) => {
 
     // 2. If not in cache, fetch async with loader
     setRegion(prev => ({ ...prev, isLoading: true }));
-    getDaycares(region.arcode).then(data => {
-      setRegion(prev => ({ ...prev, daycares: data, isLoading: false }));
+    getDaycares(requestedArcode).then(data => {
+      if (cancelled) return;
+      setRegion(prev => prev.arcode === requestedArcode
+        ? { ...prev, daycares: data, isLoading: false }
+        : prev);
       
       // Merge into cumulative map cache
       if (data && data.length > 0) {
@@ -141,6 +146,10 @@ export const SearchProvider = ({ children }) => {
         });
       }
     });
+
+    return () => {
+      cancelled = true;
+    };
   }, [region.arcode, region.isManual]);
 
   // Sync region.daycares to cumulative mapDaycares whenever it updates
@@ -186,7 +195,17 @@ export const SearchProvider = ({ children }) => {
   const [jobCounts, setJobCounts] = useState({});
 
   const hasFetchedJobs = useRef(false);
-  const jobIndex = useRef(new Map());
+  const jobIndex = useMemo(() => {
+    const index = new Map();
+    const normalize = (name) => name ? name.replace(/\s/g, '').replace(/\(.*\)/g, '') : '';
+    allJobs.forEach(job => {
+      const norm = normalize(job.center_name);
+      if (!norm) return;
+      if (!index.has(norm)) index.set(norm, []);
+      index.get(norm).push(job);
+    });
+    return index;
+  }, [allJobs]);
 
   // Fetch job counts with minimal data for strict matching
   const fetchJobCounts = async () => {
@@ -203,22 +222,16 @@ export const SearchProvider = ({ children }) => {
         hasFetchedJobs.current = true;
         
         const counts = {};
-        const index = new Map();
         const normalize = (name) => name ? name.replace(/\s/g, '').replace(/\(.*\)/g, '') : '';
         
         data.forEach(job => {
           const norm = normalize(job.center_name);
           if (norm) {
             counts[norm] = (counts[norm] || 0) + 1;
-            if (!index.has(norm)) index.set(norm, []);
-            index.get(norm).push(job);
           }
         });
         
-        jobIndex.current = index;
         setJobCounts(counts);
-        setAllJobs(data);
-        hasFetchedJobs.current = true;
       }
     } catch (e) {
       console.warn('Job fetch fail', e);
@@ -421,13 +434,13 @@ export const SearchProvider = ({ children }) => {
   };
 
   const filteredDaycares = useMemo(() => 
-    applyFilters(region.daycares, filters, jobIndex.current, daycareRatings), 
-    [region.daycares, filters, allJobs, daycareRatings]
+    applyFilters(region.daycares, filters, jobIndex, daycareRatings),
+    [region.daycares, filters, jobIndex, daycareRatings]
   );
 
   const filteredMapDaycares = useMemo(() => 
-    applyFilters(mapDaycares, filters, jobIndex.current, daycareRatings), 
-    [mapDaycares, filters, allJobs, daycareRatings]
+    applyFilters(mapDaycares, filters, jobIndex, daycareRatings),
+    [mapDaycares, filters, jobIndex, daycareRatings]
   );
 
   return (

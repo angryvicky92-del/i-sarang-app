@@ -1,5 +1,6 @@
+/* global process */
 import React, { useRef, useEffect, useMemo, useState, useCallback } from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { WebView } from 'react-native-webview';
 
 const KAKAO_JS_KEY = process.env.EXPO_PUBLIC_KAKAO_JS_KEY;
@@ -26,9 +27,10 @@ export default function KakaoMapWebView({ center, animateTick, markers, userLoca
   // 2. Fast highlight for selected marker
   useEffect(() => {
     if (webviewRef.current && isMapReady) {
+      const selectedIdJson = JSON.stringify(selectedId || '');
       webviewRef.current.injectJavaScript(`
         if (window.selectMarker) {
-           window.selectMarker("${selectedId || ''}");
+           window.selectMarker(${selectedIdJson});
         }
         true;
       `);
@@ -471,7 +473,7 @@ export default function KakaoMapWebView({ center, animateTick, markers, userLoca
           </script>
     </body>
     </html>
-  `, []);
+  `, [initialCenter?.lat, initialCenter?.lng]);
 
   const handleMessage = useCallback((event) => {
     try {
@@ -493,6 +495,14 @@ export default function KakaoMapWebView({ center, animateTick, markers, userLoca
       console.warn('WebView Message Parse Error', err);
     }
   }, [onRegionChange, onMarkerPress, onClusterClick, onMapPress]);
+
+  if (!KAKAO_JS_KEY) {
+    return (
+      <View style={[styles.container, styles.fallback]}>
+        <Text style={styles.fallbackText}>지도 API 설정이 필요합니다.</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -517,5 +527,7 @@ export default function KakaoMapWebView({ center, animateTick, markers, userLoca
 
 const styles = StyleSheet.create({
   container: { flex: 1, width: '100%', backgroundColor: '#E2E8F0' },
-  webview: { flex: 1, backgroundColor: 'transparent' }
+  webview: { flex: 1, backgroundColor: 'transparent' },
+  fallback: { alignItems: 'center', justifyContent: 'center' },
+  fallbackText: { color: '#64748B', fontSize: 13 }
 });

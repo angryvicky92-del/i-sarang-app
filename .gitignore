@@ -23,3 +23,8 @@ dist-ssr
 *.sln
 *.sw?
 .env
+
+# Expo local state and generated exports
+.expo/
+app/.expo/
+app/.codex-export*/
