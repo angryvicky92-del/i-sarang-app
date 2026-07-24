@@ -48,8 +48,7 @@ export default function Login() {
     }
 
     setLoading(true)
-    // admin86 아이디인 경우 내부적으로 이메일 형식으로 변환 (Supabase Auth 대응)
-    const loginEmail = formData.email === 'admin86' ? 'admin86@admin.com' : formData.email
+    const loginEmail = formData.email.trim()
     const { data, error } = await signIn({ ...formData, email: loginEmail })
     setLoading(false)
 
@@ -67,7 +66,7 @@ export default function Login() {
       showToast('가입하신 이메일 주소를 먼저 입력해 주세요.')
       return
     }
-    const resetEmail = formData.email === 'admin86' ? 'admin86@admin.com' : formData.email
+    const resetEmail = formData.email.trim()
     const { error } = await resetPassword(resetEmail)
     if (error) {
       showToast('요청 중 오류가 발생했습니다.')

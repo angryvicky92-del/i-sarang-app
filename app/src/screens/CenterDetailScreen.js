@@ -22,7 +22,7 @@ import { getOrCreateChat } from '../services/chatService';
 
 const screenWidth = Dimensions.get('window').width;
 
-const KAKAO_KEY = process.env.EXPO_PUBLIC_KAKAO_JS_KEY || 'dc33fe7753b02b59868630ccbfd7b820';
+const KAKAO_KEY = process.env.EXPO_PUBLIC_KAKAO_JS_KEY;
 
 const calculateRatio = (children, teachers) => {
   if (!teachers || teachers === 0) return '계산불가';

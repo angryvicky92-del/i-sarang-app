@@ -2,7 +2,7 @@ import React, { useRef, useEffect, useMemo, useState, useCallback } from 'react'
 import { View, StyleSheet } from 'react-native';
 import { WebView } from 'react-native-webview';
 
-const KAKAO_JS_KEY = process.env.EXPO_PUBLIC_KAKAO_JS_KEY || 'dc33fe7753b02b59868630ccbfd7b820';
+const KAKAO_JS_KEY = process.env.EXPO_PUBLIC_KAKAO_JS_KEY;
 
 export default function KakaoMapWebView({ center, animateTick, markers, userLocation, selectedId, isDarkMode, onRegionChange, onMarkerPress, onClusterClick, onMapPress }) {
   const webviewRef = useRef(null);
@@ -247,8 +247,14 @@ export default function KakaoMapWebView({ center, animateTick, markers, userLoca
                     
                     var content = document.createElement('div');
                     content.style.cssText = 'background: white; border: 2px solid #75BA57; border-radius: 12px; padding: 6px 12px; font-weight: 900; color: #1E293B; font-size: 13px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); cursor: pointer; display: flex; flex-direction: row; align-items: center; justify-content: center; gap: 4px;';
-                    content.innerHTML = '<span style="color: #64748B; font-size: 13px;">' + g.district + '</span>' + 
-                                       '<span style="color: #75BA57; font-size: 16px;">' + g.count + '</span>';
+                    var districtLabel = document.createElement('span');
+                    districtLabel.style.cssText = 'color: #64748B; font-size: 13px;';
+                    districtLabel.textContent = String(g.district || '');
+                    var countLabel = document.createElement('span');
+                    countLabel.style.cssText = 'color: #75BA57; font-size: 16px;';
+                    countLabel.textContent = String(g.count || 0);
+                    content.appendChild(districtLabel);
+                    content.appendChild(countLabel);
                     
                     content.onclick = function() {
                         map.setLevel(5, { anchor: pos, animate: true });
@@ -313,7 +319,7 @@ export default function KakaoMapWebView({ center, animateTick, markers, userLoca
             if (selectedId && selectedMarker) {
                 var labelDiv = document.createElement('div');
                 labelDiv.className = 'pin-label';
-                labelDiv.innerHTML = (selectedMarker.daycareName || selectedMarker.title || '상세보기');
+                labelDiv.textContent = (selectedMarker.daycareName || selectedMarker.title || '상세보기');
                 var labelOverlay = new kakao.maps.CustomOverlay({
                     position: selectedMarker.getPosition(), 
                     content: labelDiv, 
@@ -492,16 +498,16 @@ export default function KakaoMapWebView({ center, animateTick, markers, userLoca
     <View style={styles.container}>
       <WebView
         ref={webviewRef}
-        source={{ html, baseUrl: 'http://localhost' }}
+        source={{ html, baseUrl: 'https://dapi.kakao.com' }}
         style={styles.webview}
         onMessage={handleMessage}
         scrollEnabled={false}
         javaScriptEnabled={true}
         domStorageEnabled={true}
-        mixedContentMode="always"
-        allowFileAccess={true}
-        allowUniversalAccessFromFileURLs={true}
-        originWhitelist={['*']}
+        mixedContentMode="never"
+        allowFileAccess={false}
+        allowUniversalAccessFromFileURLs={false}
+        originWhitelist={['about:blank', 'https://*.kakao.com', 'https://*.kakaocdn.net', 'https://*.daumcdn.net']}
         cacheEnabled={true}
         renderToHardwareTextureAndroid={true}
       />

@@ -80,7 +80,7 @@ export default function LoginScreen({ navigation }) {
   }, []);
 
   const handleAuth = async () => {
-    const loginEmail = email.trim() === 'admin86' ? 'admin86@admin.com' : email.trim();
+    const loginEmail = email.trim();
     setLoading(true);
 
     try {
@@ -132,42 +132,22 @@ export default function LoginScreen({ navigation }) {
           return;
         }
 
-        // --- Handle Mock OTP vs Real OTP ---
-        if (otpToken === '123456') {
-          // User used the Mock bypass. They are NOT authenticated yet.
-          // Try to sign them up directly. (Works best if 'Confirm email' is disabled in Supabase)
-          const { data, error: signUpError } = await supabase.auth.signUp({
-            email: loginEmail,
-            password: password
-          });
-          
-          if (signUpError) {
-            if (signUpError.message.includes('already registered')) {
-              // If already registered, sign them in
-              const { error: signInError } = await supabase.auth.signInWithPassword({ email: loginEmail, password });
-              if (signInError) throw new Error('이미 가입된 계정입니다. 해당 로그인 버튼을 이용해 주세요.');
-            } else {
-              throw signUpError;
-            }
-          }
-        } else {
-          // User used Real OTP. They have a session but a temporary password.
-          const { error: updateError } = await supabase.auth.updateUser({ password });
-          if (updateError) throw updateError;
-        }
+        // A verified OTP creates the authenticated session. Set the chosen
+        // password only after that server-verified session exists.
+        const { error: updateError } = await supabase.auth.updateUser({ password });
+        if (updateError) throw updateError;
 
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) throw new Error('인증 정보를 찾을 수 없습니다.');
 
-        const is_admin = email.trim() === 'admin86';
-        const finalRole = is_admin ? '관리자' : (role === 'teacher' ? '선생님' : '학부모');
+        const finalRole = role === 'teacher' ? '선생님' : '학부모';
 
         const { error: profileError } = await supabase.from('profiles').upsert([
           {
             id: user.id,
             nickname,
             user_type: finalRole,
-            is_verified: is_admin ? true : (finalRole === '선생님' ? false : true)
+            is_verified: finalRole !== '선생님'
           }
         ]);
         if (profileError) throw profileError;
@@ -194,7 +174,7 @@ export default function LoginScreen({ navigation }) {
       Alert.alert('알림', '이메일을 먼저 입력해주세요.');
       return;
     }
-    const loginEmail = email.trim() === 'admin86' ? 'admin86@admin.com' : email.trim();
+    const loginEmail = email.trim();
     setLoading(true);
     try {
       // Use signInWithOtp which is more reliable for OTP flow
@@ -206,16 +186,7 @@ export default function LoginScreen({ navigation }) {
         }
       });
 
-      if (error) {
-        // Fallback to Mock Mode on SMTP failure
-        console.warn('Supabase SMTP Error, falling back to mock:', error.message);
-        Alert.alert(
-          '테스트 모드 전환 🛠️',
-          '수파베이스 이메일 발송 제한/오류로 인하여 테스트 모드로 넘깁니다.\n\n인증번호: 123456'
-        );
-        setIsOtpSent(true);
-        return;
-      }
+      if (error) throw error;
 
       setIsOtpSent(true);
       Alert.alert('알림', '이메일로 6자리 인증번호가 발송되었습니다.');
@@ -233,14 +204,7 @@ export default function LoginScreen({ navigation }) {
       return;
     }
 
-    // --- Mock Mode Verification ---
-    if (otpToken === '123456') {
-      setIsOtpVerified(true);
-      Alert.alert('인증 통과', '테스트 모드로 우회 인증되었습니다.');
-      return;
-    }
-
-    const loginEmail = email.trim() === 'admin86' ? 'admin86@admin.com' : email.trim();
+    const loginEmail = email.trim();
     setVerifyingOtp(true);
     try {
       // type 'email' or 'signup' depending on supabase version, but 'email' is very reliable

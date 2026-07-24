@@ -3,7 +3,7 @@ import { View, StyleSheet } from 'react-native';
 import { WebView } from 'react-native-webview';
 
 // The Javascript Kakao API key found in the web version's index.html
-const KAKAO_JS_KEY = process.env.EXPO_PUBLIC_KAKAO_JS_KEY || 'dc33fe7753b02b59868630ccbfd7b820';
+const KAKAO_JS_KEY = process.env.EXPO_PUBLIC_KAKAO_JS_KEY;
 
 export default function KakaoRoadview({ lat, lng }) {
   // We use baseUrl 'http://localhost' to bypass Kakao's domain restrictions
@@ -51,16 +51,16 @@ export default function KakaoRoadview({ lat, lng }) {
   return (
     <View style={styles.container}>
       <WebView
-        originWhitelist={['*']}
+        originWhitelist={['about:blank', 'https://*.kakao.com', 'https://*.kakaocdn.net', 'https://*.daumcdn.net']}
         source={{ html: htmlContent, baseUrl: 'http://localhost' }}
         style={styles.webview}
         scrollEnabled={false}
         bounces={false}
         javaScriptEnabled={true}
         domStorageEnabled={true}
-        mixedContentMode="always"
-        allowFileAccess={true}
-        allowUniversalAccessFromFileURLs={true}
+        mixedContentMode="never"
+        allowFileAccess={false}
+        allowUniversalAccessFromFileURLs={false}
         pointerEvents="auto"
       />
     </View>
