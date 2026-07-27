@@ -18,8 +18,7 @@ export default function KakaoRoadview({ lat, lng }) {
     );
   }
 
-  // We use baseUrl 'http://localhost' to bypass Kakao's domain restrictions
-  // assuming 'http://localhost' is registered in the user's Kakao Dev Console.
+  // Use the HTTPS host registered for this JavaScript key in Kakao Developers.
   const htmlContent = `
     <!DOCTYPE html>
     <html>
@@ -63,8 +62,8 @@ export default function KakaoRoadview({ lat, lng }) {
   return (
     <View style={styles.container}>
       <WebView
-        originWhitelist={['about:blank', 'http://localhost', 'https://*.kakao.com', 'https://*.kakaocdn.net', 'https://*.daumcdn.net']}
-        source={{ html: htmlContent, baseUrl: 'http://localhost' }}
+        originWhitelist={['about:blank', 'https://roject-946a273f-869e-48da-a0e.web.app', 'https://*.kakao.com', 'https://*.kakaocdn.net', 'https://*.daumcdn.net']}
+        source={{ html: htmlContent, baseUrl: 'https://roject-946a273f-869e-48da-a0e.web.app' }}
         style={styles.webview}
         scrollEnabled={false}
         bounces={false}
