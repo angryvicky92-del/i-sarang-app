@@ -535,7 +535,6 @@ export default function KakaoMapWebView({ center, animateTick, markers, userLoca
         allowUniversalAccessFromFileURLs={false}
         originWhitelist={['about:blank', 'http://localhost', 'https://*.kakao.com', 'https://*.kakaocdn.net', 'https://*.daumcdn.net']}
         onError={(event) => setMapError(event.nativeEvent.description || 'WebView load failed')}
-        onHttpError={(event) => setMapError(`HTTP ${event.nativeEvent.statusCode}`)}
         cacheEnabled={true}
         renderToHardwareTextureAndroid={true}
       />
