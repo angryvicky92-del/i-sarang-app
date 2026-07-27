@@ -63,14 +63,14 @@ export default function KakaoRoadview({ lat, lng }) {
   return (
     <View style={styles.container}>
       <WebView
-        originWhitelist={['about:blank', 'https://*.kakao.com', 'https://*.kakaocdn.net', 'https://*.daumcdn.net']}
-        source={{ html: htmlContent, baseUrl: 'https://dapi.kakao.com' }}
+        originWhitelist={['about:blank', 'http://localhost', 'https://*.kakao.com', 'https://*.kakaocdn.net', 'https://*.daumcdn.net']}
+        source={{ html: htmlContent, baseUrl: 'http://localhost' }}
         style={styles.webview}
         scrollEnabled={false}
         bounces={false}
         javaScriptEnabled={true}
         domStorageEnabled={true}
-        mixedContentMode="never"
+        mixedContentMode="always"
         allowFileAccess={false}
         allowUniversalAccessFromFileURLs={false}
         pointerEvents="auto"

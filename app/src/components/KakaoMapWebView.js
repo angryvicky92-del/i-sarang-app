@@ -8,6 +8,7 @@ const KAKAO_JS_KEY = process.env.EXPO_PUBLIC_KAKAO_JS_KEY;
 export default function KakaoMapWebView({ center, animateTick, markers, userLocation, selectedId, isDarkMode, onRegionChange, onMarkerPress, onClusterClick, onMapPress }) {
   const webviewRef = useRef(null);
   const [isMapReady, setIsMapReady] = useState(false);
+  const [mapError, setMapError] = useState(null);
 
   // 1. Update full marker set only when data changes
   const prevMarkersRef = useRef(null);
@@ -155,7 +156,11 @@ export default function KakaoMapWebView({ center, animateTick, markers, userLoca
           z-index: 1000;
         }
       </style>
-      <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=${KAKAO_JS_KEY}&libraries=clusterer&autoload=false"></script>
+      <script
+        type="text/javascript"
+        src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=${KAKAO_JS_KEY}&libraries=clusterer&autoload=false"
+        onerror="window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'MAP_ERROR', message: 'Kakao SDK load failed' }))"
+      ></script>
     </head>
     <body class="">
       <div id="map"></div>
@@ -480,6 +485,9 @@ export default function KakaoMapWebView({ center, animateTick, markers, userLoca
       const data = JSON.parse(event.nativeEvent.data);
       if (data.type === 'READY') {
         setIsMapReady(true);
+        setMapError(null);
+      } else if (data.type === 'MAP_ERROR') {
+        setMapError(data.message || '지도 SDK를 불러오지 못했습니다.');
       } else if (data.type === 'REGION_CHANGE') {
         if (onRegionChange) {
           onRegionChange({ latitude: data.latitude, longitude: data.longitude, bounds: data.bounds });
@@ -504,20 +512,30 @@ export default function KakaoMapWebView({ center, animateTick, markers, userLoca
     );
   }
 
+  if (mapError) {
+    return (
+      <View style={[styles.container, styles.fallback]}>
+        <Text style={styles.fallbackText}>지도를 불러오지 못했습니다. 네트워크와 카카오 도메인 설정을 확인해 주세요.</Text>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <WebView
         ref={webviewRef}
-        source={{ html, baseUrl: 'https://dapi.kakao.com' }}
+        source={{ html, baseUrl: 'http://localhost' }}
         style={styles.webview}
         onMessage={handleMessage}
         scrollEnabled={false}
         javaScriptEnabled={true}
         domStorageEnabled={true}
-        mixedContentMode="never"
+        mixedContentMode="always"
         allowFileAccess={false}
         allowUniversalAccessFromFileURLs={false}
-        originWhitelist={['about:blank', 'https://*.kakao.com', 'https://*.kakaocdn.net', 'https://*.daumcdn.net']}
+        originWhitelist={['about:blank', 'http://localhost', 'https://*.kakao.com', 'https://*.kakaocdn.net', 'https://*.daumcdn.net']}
+        onError={(event) => setMapError(event.nativeEvent.description || 'WebView load failed')}
+        onHttpError={(event) => setMapError(`HTTP ${event.nativeEvent.statusCode}`)}
         cacheEnabled={true}
         renderToHardwareTextureAndroid={true}
       />
