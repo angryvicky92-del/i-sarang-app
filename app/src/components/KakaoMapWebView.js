@@ -63,9 +63,9 @@ export default function KakaoMapWebView({ center, animateTick, markers, userLoca
 
   // When center updates from context, pass it to webview
   // We only panTo if animateTick has changed (explicit movement request)
-  const lastAnimateTick = useRef(animateTick);
+  const lastAnimateTick = useRef(null);
   useEffect(() => {
-    if (webviewRef.current && center && animateTick !== lastAnimateTick.current) {
+    if (webviewRef.current && isMapReady && center && animateTick && animateTick !== lastAnimateTick.current) {
       lastAnimateTick.current = animateTick;
       const moveScript = `
         if (window.map) {
@@ -76,7 +76,7 @@ export default function KakaoMapWebView({ center, animateTick, markers, userLoca
       `;
       webviewRef.current.injectJavaScript(moveScript);
     }
-  }, [animateTick, center]); 
+  }, [animateTick, center, isMapReady]);
 
   // Initial load or major center jumps without animation
   useEffect(() => {

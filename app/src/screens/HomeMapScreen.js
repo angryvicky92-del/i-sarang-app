@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Platform, InteractionManager, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Platform, InteractionManager, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Star, Map as MapIcon, Navigation, Search, ChevronDown, Info, SlidersHorizontal, Heart } from 'lucide-react-native';
 import * as Location from 'expo-location';
@@ -528,18 +528,25 @@ export default function HomeMapScreen({ navigation, route }) {
           if (isLocating) return;
           setIsLocating(true);
           try {
-            const { status } = await Location.requestForegroundPermissionsAsync();
+            const currentPermission = await Location.getForegroundPermissionsAsync();
+            const { status } = currentPermission.status === 'granted'
+              ? currentPermission
+              : await Location.requestForegroundPermissionsAsync();
             if (status !== 'granted') {
               alert('위치 권한이 필요합니다.');
               setIsLocating(false);
               return;
             }
             
-            // Get position with Balanced accuracy for speed, High can be slow
-            const location = await Location.getCurrentPositionAsync({ 
-                accuracy: Location.Accuracy.Balanced,
-                timeout: 5000 
+            const lastKnown = await Location.getLastKnownPositionAsync({
+              maxAge: 120000,
+              requiredAccuracy: 1000,
             });
+            const location = await Promise.race([
+              Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
+              new Promise((resolve) => setTimeout(() => resolve(lastKnown), 8000)),
+            ]);
+            if (!location) throw new Error('현재 위치를 확인할 수 없습니다.');
             const { latitude, longitude } = location.coords;
             setUserLocation({ lat: latitude, lng: longitude });
             
@@ -559,6 +566,7 @@ export default function HomeMapScreen({ navigation, route }) {
             }
           } catch (e) { 
             console.warn('My Locate fail', e); 
+            Alert.alert('위치 확인 실패', e?.message || 'GPS를 켠 후 다시 시도해 주세요.');
           } finally {
             setIsLocating(false);
           }

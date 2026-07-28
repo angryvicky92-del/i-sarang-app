@@ -27,6 +27,11 @@ const getAuthErrorMessage = (error) => {
   if (message.includes('Password is too short')) return '비밀번호가 너무 짧습니다.';
   if (message.includes('Rate limit exceeded')) return '잠시 후 다시 시도해 주세요.';
   
+  if (message.toLowerCase().includes('email rate limit')) return '인증메일 발송 횟수를 초과했습니다. 잠시 후 다시 시도해 주세요.';
+  if (message.toLowerCase().includes('testing emails') || message.toLowerCase().includes('error sending magic link')) {
+    return '메일 발송 서버 설정이 완료되지 않았습니다. 관리자에게 문의해 주세요.';
+  }
+  if (message.toLowerCase().includes('network')) return '네트워크 연결을 확인한 후 다시 시도해 주세요.';
   return message;
 };
 
@@ -179,12 +184,19 @@ export default function LoginScreen({ navigation }) {
     try {
       // Use signInWithOtp which is more reliable for OTP flow
       // This will use the "Magic Link" email template in Supabase Dashboard.
-      const { error } = await supabase.auth.signInWithOtp({
+      const otpRequest = supabase.auth.signInWithOtp({
         email: loginEmail,
         options: {
           shouldCreateUser: true, // Create user if doesn't exist
         }
       });
+      const { error } = await Promise.race([
+        otpRequest,
+        new Promise((_, reject) => setTimeout(
+          () => reject(new Error('인증메일 요청 시간이 초과되었습니다. 네트워크 연결을 확인해 주세요.')),
+          15000
+        )),
+      ]);
 
       if (error) throw error;
 
@@ -208,7 +220,7 @@ export default function LoginScreen({ navigation }) {
     setVerifyingOtp(true);
     try {
       // type 'email' or 'signup' depending on supabase version, but 'email' is very reliable
-      const { data, error } = await supabase.auth.verifyOtp({
+      const { error } = await supabase.auth.verifyOtp({
         email: loginEmail,
         token: otpToken,
         type: 'email'
@@ -249,7 +261,7 @@ export default function LoginScreen({ navigation }) {
         setIsNicknameChecked(true);
         setNicknameError('');
       }
-    } catch (e) {
+    } catch {
       setNicknameError('중복 확인 중 오류가 발생했습니다.');
     } finally {
       setCheckingNickname(false);
