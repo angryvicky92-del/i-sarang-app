@@ -12,7 +12,8 @@ const kakaoGeoCache = new Map();
 export const getKakaoRegionCode = async (lat, lng) => {
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
 
-  const cacheKey = `${lat.toFixed(2)}_${lng.toFixed(2)}`;
+  // District boundaries can be much closer than the old ~1 km cache bucket.
+  const cacheKey = `${lat.toFixed(4)}_${lng.toFixed(4)}`;
   if (kakaoGeoCache.has(cacheKey)) {
     return kakaoGeoCache.get(cacheKey);
   }

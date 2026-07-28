@@ -62,8 +62,8 @@ export default function KakaoRoadview({ lat, lng }) {
   return (
     <View style={styles.container}>
       <WebView
-        originWhitelist={['about:blank', 'https://roject-946a273f-869e-48da-a0e.web.app', 'https://*.kakao.com', 'https://*.kakaocdn.net', 'https://*.daumcdn.net']}
-        source={{ html: htmlContent, baseUrl: 'https://roject-946a273f-869e-48da-a0e.web.app' }}
+        originWhitelist={['about:blank', 'https://project-946a273f-869e-48da-a0e.web.app', 'https://*.kakao.com', 'https://*.kakaocdn.net', 'https://*.daumcdn.net']}
+        source={{ html: htmlContent, baseUrl: 'https://project-946a273f-869e-48da-a0e.web.app' }}
         style={styles.webview}
         scrollEnabled={false}
         bounces={false}

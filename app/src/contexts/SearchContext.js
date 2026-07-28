@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useMemo, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import * as Location from 'expo-location';
 import { Alert } from 'react-native';
 import { supabase } from '../services/supabaseClient';
@@ -28,7 +28,7 @@ export const SearchProvider = ({ children }) => {
     visibleRegions: [] // Array of sigungu names seen in viewport
   });
   
-  // Cumulative caches for Map pins
+  // Pins represent the current viewport only; API-level caches live in services.
   const [mapDaycares, setMapDaycares] = useState([]);
   const [mapPlaces, setMapPlaces] = useState([]);
 
@@ -50,7 +50,7 @@ export const SearchProvider = ({ children }) => {
     });
   };
 
-  const updateRegion = (sido, sigungu, arcode, center, animate = false, manualDaycares = null) => {
+  const updateRegion = useCallback((sido, sigungu, arcode, center, animate = false, manualDaycares = null) => {
     setRegion(prev => ({
       ...prev,
       sido: sido,
@@ -63,7 +63,7 @@ export const SearchProvider = ({ children }) => {
       animateTick: animate ? Date.now() : prev.animateTick,
       visibleRegions: Array.isArray(sigungu) ? sigungu : [sigungu]
     }));
-  };
+  }, []);
 
   // 앱 로드 시 한 번만 현재 위치로 자동 설정 시도
   useEffect(() => {
@@ -137,14 +137,7 @@ export const SearchProvider = ({ children }) => {
         ? { ...prev, daycares: data, isLoading: false }
         : prev);
       
-      // Merge into cumulative map cache
-      if (data && data.length > 0) {
-        setMapDaycares(prev => {
-          const existingIds = new Set(prev.map(dc => dc.stcode));
-          const newItems = data.filter(dc => !existingIds.has(dc.stcode));
-          return [...prev, ...newItems];
-        });
-      }
+      setMapDaycares(Array.isArray(data) ? data : []);
     });
 
     return () => {
@@ -152,17 +145,27 @@ export const SearchProvider = ({ children }) => {
     };
   }, [region.arcode, region.isManual]);
 
-  // Sync region.daycares to cumulative mapDaycares whenever it updates
+  // Keep map pins aligned with the latest resolved viewport.
   useEffect(() => {
-    if (region.daycares && region.daycares.length > 0) {
-      setMapDaycares(prev => {
-        const existingIds = new Set(prev.map(dc => dc.stcode));
-        const newItems = region.daycares.filter(dc => !existingIds.has(dc.stcode));
-        if (newItems.length === 0) return prev;
-        return [...prev, ...newItems];
-      });
-    }
+    setMapDaycares(Array.isArray(region.daycares) ? region.daycares : []);
   }, [region.daycares]);
+
+  const replaceMapPlaces = useCallback((data) => {
+    const incoming = Array.isArray(data) ? data : (data ? [data] : []);
+    const normalize = (name) => name ? name.replace(/\s/g, '').replace(/\(.*\)/g, '') : '';
+    const seenIds = new Set();
+    const seenHashes = new Set();
+    const uniqueItems = incoming.filter(item => {
+      if (!item || !Number.isFinite(Number(item.lat)) || !Number.isFinite(Number(item.lng))) return false;
+      const id = String(item.id || item.contentid || '');
+      const hash = `${normalize(item.title || item.name)}_${Number(item.lat).toFixed(4)}_${Number(item.lng).toFixed(4)}`;
+      if ((id && seenIds.has(id)) || seenHashes.has(hash)) return false;
+      if (id) seenIds.add(id);
+      seenHashes.add(hash);
+      return true;
+    });
+    setMapPlaces(uniqueItems);
+  }, []);
   
   const lastFetchedIds = useRef(new Set());
   useEffect(() => {
@@ -460,39 +463,7 @@ export const SearchProvider = ({ children }) => {
       updateDaycareRating,
       mapDaycares,
       mapPlaces,
-      setMapPlaces: (data) => {
-        if (!data) return;
-        setMapPlaces(prev => {
-          const normalize = (n) => n ? n.replace(/\s/g, '').replace(/\(.*\)/g, '') : '';
-          
-          // 1. Combine previous and incoming data
-          const incoming = Array.isArray(data) ? data : [data];
-          const allItems = [...prev, ...incoming];
-          
-          // 2. Perform global deduplication (ID and Location Hash)
-          const uniqueItems = [];
-          const seenIds = new Set();
-          const seenHashes = new Set();
-          
-          allItems.forEach(item => {
-            if (!item) return;
-            const id = String(item.id || item.contentid || '');
-            const hash = `${normalize(item.title || item.name)}_${Number(item.lat || 0).toFixed(3)}_${Number(item.lng || 0).toFixed(3)}`;
-            
-            // Check if either ID or exact Location+Name combo was already processed
-            if (id && seenIds.has(id)) return;
-            if (hash && seenHashes.has(hash)) return;
-            
-            if (id) seenIds.add(id);
-            if (hash) seenHashes.add(hash);
-            uniqueItems.push(item);
-          });
-          
-          // Only update if the length changed or content is fresh
-          if (uniqueItems.length === prev.length && prev.length > 0) return prev;
-          return uniqueItems;
-        });
-      },
+      setMapPlaces: replaceMapPlaces,
       filteredMapDaycares
     }}>
       {children}

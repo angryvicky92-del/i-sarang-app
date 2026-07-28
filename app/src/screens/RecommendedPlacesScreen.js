@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Image, Linking, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../contexts/ThemeContext';
@@ -13,32 +13,48 @@ export default function RecommendedPlacesScreen({ navigation }) {
   const { region } = useSearch();
   const [places, setPlaces] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [userLocation, setUserLocation] = useState(null);
+  const requestIdRef = useRef(0);
 
-  const fetchPlaces = async () => {
+  const fetchPlaces = async (requestId) => {
     setLoading(true);
     let lat = region?.center?.lat || 37.5145;
     let lng = region?.center?.lng || 127.0607;
 
     try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status === 'granted') {
-        const location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-        lat = location.coords.latitude;
-        lng = location.coords.longitude;
-        setUserLocation({ lat, lng });
+      try {
+        const currentPermission = await Location.getForegroundPermissionsAsync();
+        const { status } = currentPermission.status === 'granted'
+          ? currentPermission
+          : await Location.requestForegroundPermissionsAsync();
+        if (status === 'granted') {
+          const lastKnown = await Location.getLastKnownPositionAsync({ maxAge: 120000, requiredAccuracy: 1000 });
+          const location = lastKnown || await Promise.race([
+            Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Location request timed out')), 8000))
+          ]);
+          if (location) {
+            lat = location.coords.latitude;
+            lng = location.coords.longitude;
+          }
+        }
+      } catch (locationError) {
+        console.warn('Using saved region for recommendations:', locationError.message);
       }
       const results = await getRecommendedPlaces(lat, lng, 10000, region?.sido, region?.sigungu); // 10km radius
-      setPlaces(results);
+      if (requestId === requestIdRef.current) setPlaces(results);
     } catch (e) {
       console.error(e);
     }
-    setLoading(false);
+    if (requestId === requestIdRef.current) setLoading(false);
   };
 
   useEffect(() => {
-    fetchPlaces();
-  }, [region]);
+    const requestId = ++requestIdRef.current;
+    fetchPlaces(requestId);
+    return () => {
+      if (requestId === requestIdRef.current) requestIdRef.current += 1;
+    };
+  }, []);
 
   const filteredPlaces = places.filter(p => p.isKidsFriendly);
 
@@ -115,7 +131,7 @@ export default function RecommendedPlacesScreen({ navigation }) {
       ) : (
         <FlatList
           data={filteredPlaces}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item) => String(item.id)}
           renderItem={renderItem}
           contentContainerStyle={{ padding: 16, gap: 16 }}
           showsVerticalScrollIndicator={false}

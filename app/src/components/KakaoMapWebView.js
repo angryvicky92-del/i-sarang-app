@@ -524,7 +524,7 @@ export default function KakaoMapWebView({ center, animateTick, markers, userLoca
     <View style={styles.container}>
       <WebView
         ref={webviewRef}
-        source={{ html, baseUrl: 'https://roject-946a273f-869e-48da-a0e.web.app' }}
+        source={{ html, baseUrl: 'https://project-946a273f-869e-48da-a0e.web.app' }}
         style={styles.webview}
         onMessage={handleMessage}
         scrollEnabled={false}
@@ -533,7 +533,7 @@ export default function KakaoMapWebView({ center, animateTick, markers, userLoca
         mixedContentMode="always"
         allowFileAccess={false}
         allowUniversalAccessFromFileURLs={false}
-        originWhitelist={['about:blank', 'https://roject-946a273f-869e-48da-a0e.web.app', 'https://*.kakao.com', 'https://*.kakaocdn.net', 'https://*.daumcdn.net']}
+        originWhitelist={['about:blank', 'https://project-946a273f-869e-48da-a0e.web.app', 'https://*.kakao.com', 'https://*.kakaocdn.net', 'https://*.daumcdn.net']}
         onError={(event) => setMapError(event.nativeEvent.description || 'WebView load failed')}
         cacheEnabled={true}
         renderToHardwareTextureAndroid={true}
