@@ -175,7 +175,12 @@ export default function KakaoMapWebView({ center, animateTick, markers, userLoca
         window.lastSelectedId = null;
         window.userMarker = null;
 
-        kakao.maps.load(function() {
+        if (!window.kakao || !window.kakao.maps) {
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'MAP_ERROR',
+            message: 'Kakao SDK unavailable for the configured JavaScript domain'
+          }));
+        } else kakao.maps.load(function() {
           var mapContainer = document.getElementById('map');
           var mapOption = {
               center: new kakao.maps.LatLng(${initialCenter?.lat || 37.5665}, ${initialCenter?.lng || 126.9780}),
@@ -524,7 +529,7 @@ export default function KakaoMapWebView({ center, animateTick, markers, userLoca
     <View style={styles.container}>
       <WebView
         ref={webviewRef}
-        source={{ html, baseUrl: 'https://project-946a273f-869e-48da-a0e.web.app' }}
+        source={{ html, baseUrl: 'https://roject-946a273f-869e-48da-a0e.web.app' }}
         style={styles.webview}
         onMessage={handleMessage}
         scrollEnabled={false}
@@ -533,7 +538,7 @@ export default function KakaoMapWebView({ center, animateTick, markers, userLoca
         mixedContentMode="always"
         allowFileAccess={false}
         allowUniversalAccessFromFileURLs={false}
-        originWhitelist={['about:blank', 'https://project-946a273f-869e-48da-a0e.web.app', 'https://*.kakao.com', 'https://*.kakaocdn.net', 'https://*.daumcdn.net']}
+        originWhitelist={['about:blank', 'https://roject-946a273f-869e-48da-a0e.web.app', 'https://*.kakao.com', 'https://*.kakaocdn.net', 'https://*.daumcdn.net']}
         onError={(event) => setMapError(event.nativeEvent.description || 'WebView load failed')}
         cacheEnabled={true}
         renderToHardwareTextureAndroid={true}
