@@ -135,7 +135,7 @@ export default function SettingsScreen({ navigation }) {
         />
 
         <View style={styles.footerInfo}>
-          <Text style={[styles.versionText, { color: colors.textMuted }]}>버전 정보 {Constants.expoConfig?.version || '1.0.29'}</Text>
+          <Text style={[styles.versionText, { color: colors.textMuted }]}>버전 정보 {Constants.expoConfig?.version || '1.0.30'}</Text>
         </View>
       </ScrollView>
 

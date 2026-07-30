@@ -1,5 +1,4 @@
 import Toast from 'react-native-toast-message';
-import axios from 'axios';
 
 const TOURISM_API_KEY = process.env.EXPO_PUBLIC_TOURISM_API_KEY;
 const BASE_URL = 'https://apis.data.go.kr/B551011/KorService2';
@@ -254,34 +253,28 @@ export const getPlaceDetail = async (contentId, originalPlace = null) => {
   }
 
   try {
-    // 1. Fetch Common Detail (Overview, Title, Basic Info)
-    const commonRes = await axios.get(`${BASE_URL}/detailCommon2`, {
-      params: {
+    const [commonRes, introRes] = await Promise.all([
+      fetchJson(`${BASE_URL}/detailCommon2`, {
         serviceKey: decodeURIComponent(TOURISM_API_KEY),
         MobileOS: 'ETC',
         MobileApp: 'ChildcareApp',
         _type: 'json',
-        contentId: contentId,
-        // In KorService2, these YN params are invalid or unnecessary for detailCommon2
-      }
-    });
-
-    // 2. Fetch Introduction Detail (Content Specific: opening hours, fees, parking, etc.)
-    const introRes = await axios.get(`${BASE_URL}/detailIntro2`, {
-      params: {
+        contentId,
+      }),
+      fetchJson(`${BASE_URL}/detailIntro2`, {
         serviceKey: decodeURIComponent(TOURISM_API_KEY),
         MobileOS: 'ETC',
         MobileApp: 'ChildcareApp',
         _type: 'json',
-        contentId: contentId,
+        contentId,
         contentTypeId: originalPlace?.contentTypeId || '12',
-      }
-    });
+      })
+    ]);
 
-    const commonItemRaw = commonRes.data?.response?.body?.items?.item;
+    const commonItemRaw = commonRes?.response?.body?.items?.item;
     const commonItem = Array.isArray(commonItemRaw) ? commonItemRaw[0] : commonItemRaw;
 
-    const introItemRaw = introRes.data?.response?.body?.items?.item;
+    const introItemRaw = introRes?.response?.body?.items?.item;
     const introItem = Array.isArray(introItemRaw) ? introItemRaw[0] : introItemRaw;
 
     if (commonItem) {

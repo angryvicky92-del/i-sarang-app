@@ -32,7 +32,17 @@ import { WritePostScreen } from './src/screens/WritePostScreen';
 import AdminApprovalScreen from './src/screens/AdminApprovalScreen';
 import { PostDetailScreen } from './src/screens/PostDetailScreen';
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 2 * 60 * 1000,
+      gcTime: 15 * 60 * 1000,
+      retry: 1,
+      refetchOnReconnect: true,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
 import JobDetailScreen from './src/screens/JobDetailScreen';
 import TeacherCertificationScreen from './src/screens/TeacherCertificationScreen';
 import FavoriteJobsScreen from './src/screens/FavoriteJobsScreen';

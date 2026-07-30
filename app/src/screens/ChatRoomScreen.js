@@ -19,6 +19,20 @@ export default function ChatRoomScreen({ route, navigation }) {
   const [sending, setSending] = useState(false);
   const flatListRef = useRef(null);
 
+  const fetchMessages = useCallback(async () => {
+    try {
+      const data = await getMessages(chatId);
+      setMessages(data || []);
+      setLoading(false);
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: false });
+      }, 200);
+    } catch (error) {
+      console.error('Fetch messages error:', error);
+      setLoading(false);
+    }
+  }, [chatId]);
+
   useEffect(() => {
     // Set this room as active and mark existing messages as read
     const initChat = async () => {
@@ -55,20 +69,6 @@ export default function ChatRoomScreen({ route, navigation }) {
       subscription.unsubscribe();
     };
   }, [chatId, fetchMessages, updateActiveChat, profile?.id, fetchUnreadCount]);
-
-  const fetchMessages = useCallback(async () => {
-    try {
-      const data = await getMessages(chatId);
-      setMessages(data || []);
-      setLoading(false);
-      setTimeout(() => {
-        flatListRef.current?.scrollToEnd({ animated: false });
-      }, 200);
-    } catch (error) {
-      console.error('Fetch messages error:', error);
-      setLoading(false);
-    }
-  }, [chatId]);
 
   const handleSend = useCallback(async () => {
     if (!inputText.trim() || sending) return;

@@ -35,7 +35,7 @@ export const SearchProvider = ({ children }) => {
   // Global cache for daycare ratings: { [stcode]: { parentAvg, teacherAvg } }
   const [daycareRatings, setDaycareRatings] = useState({});
 
-  const updateDaycareRating = (stcode, ratings) => {
+  const updateDaycareRating = useCallback((stcode, ratings) => {
     if (!stcode) return;
     
     setDaycareRatings(prev => {
@@ -48,7 +48,7 @@ export const SearchProvider = ({ children }) => {
         [stcode]: ratings
       };
     });
-  };
+  }, []);
 
   const updateRegion = useCallback((sido, sigungu, arcode, center, animate = false, manualDaycares = null) => {
     setRegion(prev => ({
@@ -218,7 +218,8 @@ export const SearchProvider = ({ children }) => {
       // Select ONLY required fields for matching and counting to reduce payload size
       const { data } = await supabase
         .from('job_offers')
-        .select('id, title, position, deadline, center_name, location, metadata');
+        .select('id, title, position, deadline, center_name, location, metadata')
+        .gte('deadline', new Date().toISOString().slice(0, 10));
       
       if (data) {
         setAllJobs(data);
@@ -249,7 +250,7 @@ export const SearchProvider = ({ children }) => {
     return () => clearTimeout(timer);
   }, []); // Only once on mount
 
-  const resetFilters = () => {
+  const resetFilters = useCallback(() => {
     setFilters({
       minRating: 0,
       minTeacherRating: 0,
@@ -260,11 +261,11 @@ export const SearchProvider = ({ children }) => {
       admissionAge: null,
       nameQuery: ''
     });
-  };
+  }, []);
 
   const [favorites, setFavorites] = useState([]); // Array of daycare objects or IDs
   
-  const fetchFavorites = async () => {
+  const fetchFavorites = useCallback(async () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
@@ -278,14 +279,14 @@ export const SearchProvider = ({ children }) => {
     } catch (e) {
       console.warn('Fetch favorites fail', e);
     }
-  };
+  }, []);
 
   // Load favorites on mount or auth change
   useEffect(() => {
     fetchFavorites();
-  }, [region.arcode]); // Also refresh on region change maybe? Or just once.
+  }, [fetchFavorites]);
 
-  const toggleFavorite = async (item, navigation) => {
+  const toggleFavorite = useCallback(async (item, navigation) => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
@@ -350,9 +351,9 @@ export const SearchProvider = ({ children }) => {
     } catch (e) {
       console.warn('Toggle favorite fail', e);
     }
-  };
+  }, [favorites]);
 
-  const isFavorited = (id) => favorites.some(f => f.daycare_id === id);
+  const isFavorited = useCallback((id) => favorites.some(f => f.daycare_id === id), [favorites]);
 
   // Centralized filter function for better performance
   const applyFilters = (list, filters, jobIndexMap, ratings) => {
@@ -446,26 +447,32 @@ export const SearchProvider = ({ children }) => {
     [mapDaycares, filters, jobIndex, daycareRatings]
   );
 
+  const contextValue = useMemo(() => ({
+    region,
+    updateRegion,
+    filters,
+    setFilters,
+    resetFilters,
+    filteredDaycares,
+    allJobs,
+    jobCounts,
+    favorites,
+    toggleFavorite,
+    isFavorited,
+    daycareRatings,
+    updateDaycareRating,
+    mapDaycares,
+    mapPlaces,
+    setMapPlaces: replaceMapPlaces,
+    filteredMapDaycares
+  }), [
+    region, updateRegion, filters, resetFilters, filteredDaycares, allJobs, jobCounts,
+    favorites, toggleFavorite, isFavorited, daycareRatings, updateDaycareRating,
+    mapDaycares, mapPlaces, replaceMapPlaces, filteredMapDaycares
+  ]);
+
   return (
-    <SearchContext.Provider value={{ 
-      region, 
-      updateRegion, 
-      filters, 
-      setFilters, 
-      resetFilters, 
-      filteredDaycares,
-      allJobs,
-      jobCounts,
-      favorites,
-      toggleFavorite,
-      isFavorited,
-      daycareRatings,
-      updateDaycareRating,
-      mapDaycares,
-      mapPlaces,
-      setMapPlaces: replaceMapPlaces,
-      filteredMapDaycares
-    }}>
+    <SearchContext.Provider value={contextValue}>
       {children}
     </SearchContext.Provider>
   );
