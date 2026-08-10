@@ -8,8 +8,10 @@ const API_URL_030 = 'https://api.childcare.go.kr/mediate/rest/cpmsapi030/cpmsapi
 const KAKAO_REST_KEY = process.env.EXPO_PUBLIC_KAKAO_REST_API_KEY;
 
 const kakaoGeoCache = new Map();
+const kakaoGeoRequests = new Map();
+const MAX_GEO_CACHE_SIZE = 500;
 
-export const getKakaoRegionCode = async (lat, lng) => {
+const fetchKakaoRegionCode = async (lat, lng) => {
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
 
   // District boundaries can be much closer than the old ~1 km cache bucket.
@@ -38,6 +40,9 @@ export const getKakaoRegionCode = async (lat, lng) => {
       const doc = data.documents.find(d => d.region_type === 'H') || data.documents[0];
       const result = { sido: doc.region_1depth_name, sigungu: doc.region_2depth_name };
       kakaoGeoCache.set(cacheKey, result);
+      if (kakaoGeoCache.size > MAX_GEO_CACHE_SIZE) {
+        kakaoGeoCache.delete(kakaoGeoCache.keys().next().value);
+      }
       return result;
     }
   } catch (e) { 
@@ -45,6 +50,38 @@ export const getKakaoRegionCode = async (lat, lng) => {
     return null;
   }
   return null;
+};
+
+export const resolveViewportRegions = async (points = []) => {
+  const uniquePoints = [];
+  const seen = new Set();
+  points.forEach((point) => {
+    if (!Number.isFinite(point?.lat) || !Number.isFinite(point?.lng)) return;
+    const key = `${point.lat.toFixed(4)}_${point.lng.toFixed(4)}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    uniquePoints.push(point);
+  });
+
+  const regions = await Promise.all(uniquePoints.map(async (point) => ({
+    point,
+    region: await getKakaoRegionCode(point.lat, point.lng),
+  })));
+  return regions.filter(({ region }) => region);
+};
+
+export const getKakaoRegionCode = async (lat, lng) => {
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  const requestKey = `${lat.toFixed(4)}_${lng.toFixed(4)}`;
+  if (kakaoGeoRequests.has(requestKey)) return kakaoGeoRequests.get(requestKey);
+
+  const request = fetchKakaoRegionCode(lat, lng);
+  kakaoGeoRequests.set(requestKey, request);
+  try {
+    return await request;
+  } finally {
+    kakaoGeoRequests.delete(requestKey);
+  }
 };
 
 export const getKakaoAddressCenter = async (address) => {
@@ -278,12 +315,12 @@ export const getCachedDaycares = (arcode) => {
   return null;
 };
 
-export const getMultiRegionDaycares = async (points, onProgress = null) => {
+export const getMultiRegionDaycares = async (points, onProgress = null, resolvedRegions = null) => {
   const arcodes = new Set();
   
   // Get region codes for all sample points
-  await Promise.all(points.map(async (p) => {
-    const reg = await getKakaoRegionCode(p.lat, p.lng);
+  const regionEntries = resolvedRegions || await resolveViewportRegions(points);
+  regionEntries.forEach(({ region: reg }) => {
     if (reg) {
       const sidoObj = SIDO_LIST.find(s => s.name === reg.sido || reg.sido.includes(s.name));
       if (sidoObj) {
@@ -294,7 +331,7 @@ export const getMultiRegionDaycares = async (points, onProgress = null) => {
         }
       }
     }
-  }));
+  });
 
   if (arcodes.size === 0) return [];
 

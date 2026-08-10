@@ -11,11 +11,12 @@ export default function KakaoMapWebView({ center, animateTick, markers, userLoca
   const [mapError, setMapError] = useState(null);
 
   // 1. Update full marker set only when data changes
-  const prevMarkersRef = useRef(null);
+  const prevMarkersSignatureRef = useRef('');
   useEffect(() => {
-    if (webviewRef.current && isMapReady && markers !== prevMarkersRef.current) {
-      prevMarkersRef.current = markers;
+    if (webviewRef.current && isMapReady) {
       const markersJson = JSON.stringify(markers || []);
+      if (markersJson === prevMarkersSignatureRef.current) return;
+      prevMarkersSignatureRef.current = markersJson;
       webviewRef.current.injectJavaScript(`
         if (window.updateMarkers) {
            window.updateMarkers(${markersJson});
@@ -358,13 +359,14 @@ export default function KakaoMapWebView({ center, animateTick, markers, userLoca
         window.updateMarkers = function(daycareList) {
             var newActiveMarkers = [];
             
-            activeMarkers.forEach(function(m) { m.setMap(null); });
             clusterer.clear();
             districtOverlays.forEach(function(o) { o.setMap(null); });
             districtOverlays = [];
 
+            var nextIds = {};
             daycareList.forEach(function(dc) {
                 var id = String(dc.id);
+                nextIds[id] = true;
                 var latlng = new kakao.maps.LatLng(dc.lat, dc.lng);
                 var color = dc.color || '#3B82F6';
                 var isRecommended = !!dc.isRecommended;
@@ -441,6 +443,10 @@ export default function KakaoMapWebView({ center, animateTick, markers, userLoca
                 newActiveMarkers.push(cached.marker);
             });
 
+            activeMarkers.forEach(function(marker) {
+                if (!nextIds[String(marker.daycareId)]) marker.setMap(null);
+            });
+
             activeMarkers = newActiveMarkers;
             window.updateClusteringMode(); 
             
@@ -458,7 +464,7 @@ export default function KakaoMapWebView({ center, animateTick, markers, userLoca
             var sw = bounds.getSouthWest();
             var ne = bounds.getNorthEast();
             window.ReactNativeWebView.postMessage(JSON.stringify({ 
-              type: 'REGION_CHANGE', latitude: latlng.getLat(), longitude: latlng.getLng(),
+              type: 'REGION_CHANGE', latitude: latlng.getLat(), longitude: latlng.getLng(), level: map.getLevel(),
               bounds: { sw: { lat: sw.getLat(), lng: sw.getLng() }, ne: { lat: ne.getLat(), lng: ne.getLng() } }
             }));
         });
@@ -475,7 +481,7 @@ export default function KakaoMapWebView({ center, animateTick, markers, userLoca
             var sw = bounds.getSouthWest();
             var ne = bounds.getNorthEast();
             window.ReactNativeWebView.postMessage(JSON.stringify({ 
-              type: 'REGION_CHANGE', latitude: latlng.getLat(), longitude: latlng.getLng(),
+              type: 'REGION_CHANGE', latitude: latlng.getLat(), longitude: latlng.getLng(), level: map.getLevel(),
               bounds: { sw: { lat: sw.getLat(), lng: sw.getLng() }, ne: { lat: ne.getLat(), lng: ne.getLng() } }
             }));
         }, 100);
@@ -495,7 +501,7 @@ export default function KakaoMapWebView({ center, animateTick, markers, userLoca
         setMapError(data.message || '지도 SDK를 불러오지 못했습니다.');
       } else if (data.type === 'REGION_CHANGE') {
         if (onRegionChange) {
-          onRegionChange({ latitude: data.latitude, longitude: data.longitude, bounds: data.bounds });
+          onRegionChange({ latitude: data.latitude, longitude: data.longitude, bounds: data.bounds, level: data.level });
         }
       } else if (data.type === 'MARKER_PRESS') {
         if (onMarkerPress) onMarkerPress(data.daycareId);

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Image, Linking, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../contexts/ThemeContext';
@@ -56,9 +56,9 @@ export default function RecommendedPlacesScreen({ navigation }) {
     };
   }, []);
 
-  const filteredPlaces = places.filter(p => p.isKidsFriendly);
+  const filteredPlaces = useMemo(() => places.filter(p => p.isKidsFriendly), [places]);
 
-  const renderItem = ({ item }) => {
+  const renderItem = useCallback(({ item }) => {
     const distanceMeter = parseFloat(item.dist) || 0;
     const distanceStr = distanceMeter > 1000 
       ? (distanceMeter / 1000).toFixed(1) + 'km' 
@@ -102,7 +102,7 @@ export default function RecommendedPlacesScreen({ navigation }) {
         </View>
       </TouchableOpacity>
     );
-  };
+  }, [colors, navigation]);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -135,6 +135,11 @@ export default function RecommendedPlacesScreen({ navigation }) {
           renderItem={renderItem}
           contentContainerStyle={{ padding: 16, gap: 16 }}
           showsVerticalScrollIndicator={false}
+          initialNumToRender={6}
+          maxToRenderPerBatch={6}
+          updateCellsBatchingPeriod={50}
+          windowSize={5}
+          removeClippedSubviews={Platform.OS === 'android'}
         />
       )}
     </View>

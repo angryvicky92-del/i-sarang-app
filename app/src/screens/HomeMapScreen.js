@@ -5,7 +5,7 @@ import { Star, Map as MapIcon, Navigation, Search, ChevronDown, Info, SlidersHor
 import * as Location from 'expo-location';
 import { useSearch } from '../contexts/SearchContext';
 import { useTheme } from '../contexts/ThemeContext';
-import { getKakaoRegionCode, TYPE_COLORS, PLACE_TYPE_COLORS, SIDO_LIST } from '../services/dataService';
+import { getKakaoRegionCode, resolveViewportRegions, TYPE_COLORS, PLACE_TYPE_COLORS, SIDO_LIST } from '../services/dataService';
 import { SIGUNGU_LIST } from '../services/sigungu';
 import LocationBottomSheet from '../components/LocationBottomSheet';
 import KakaoMapWebView from '../components/KakaoMapWebView';
@@ -40,8 +40,7 @@ export default function HomeMapScreen({ navigation, route }) {
   const webviewRef = useRef(null);
   const regionRequestIdRef = useRef(0);
   const placesRequestIdRef = useRef(0);
-
-  const THRESHOLD = 0.002; // Roughly 200m threshold to prevent constant refetching on minor moves
+  const lastViewportKeyRef = useRef('');
 
   const fetchItemRatings = useCallback(async (item) => {
     if (!item) return;
@@ -236,60 +235,33 @@ export default function HomeMapScreen({ navigation, route }) {
         if (now - lastProgrammaticMove.current < 1500) return;
         if (!newRegion?.latitude) return;
 
-        // Distance check to prevent spamming on minor moves
-        const dist = Math.sqrt(
-          Math.pow(newRegion.latitude - (lastFetchCoords.current?.lat || 0), 2) +
-          Math.pow(newRegion.longitude - (lastFetchCoords.current?.lng || 0), 2)
-        );
-        
-        // If move is very minor (less than ~200m), skip refetch
-        if (dist < THRESHOLD && lastFetchCoords.current?.lat !== 0) return;
+        const { sw, ne } = newRegion.bounds || { sw: null, ne: null };
+        const viewportKey = sw && ne
+          ? [sw.lat, sw.lng, ne.lat, ne.lng].map(value => Number(value).toFixed(3)).join(':') + `:${newRegion.level || ''}:${mapMode}`
+          : `${Number(newRegion.latitude).toFixed(3)}:${Number(newRegion.longitude).toFixed(3)}:${mapMode}`;
+        if (viewportKey === lastViewportKeyRef.current) return;
         
         // Only show top loading bar if we have data, otherwise full overlay
         // Delay showing loader to avoid flickering on very fast responses
         if (loadingTimer.current) clearTimeout(loadingTimer.current);
         loadingTimer.current = setTimeout(() => setIsFetching(true), 150);
 
-        // 1. Resolve Primary Region (Map Center)
-        const kakaoAddr = await getKakaoRegionCode(newRegion.latitude, newRegion.longitude);
-        if (requestId !== regionRequestIdRef.current) return;
-        if (!kakaoAddr) {
-          setIsFetching(false);
-          if (loadingTimer.current) clearTimeout(loadingTimer.current);
-          return;
-        }
-
-        const sidoObj = SIDO_LIST.find(s => s.name === kakaoAddr.sido || kakaoAddr.sido.includes(s.name));
-        if (!sidoObj) {
-          setIsFetching(false);
-          if (loadingTimer.current) clearTimeout(loadingTimer.current);
-          return;
-        }
-
-        const districts = SIGUNGU_LIST[sidoObj.code] || [];
-        const foundDistrict = districts.find(d => d.name === kakaoAddr.sigungu);
-        if (!foundDistrict) {
-          setIsFetching(false);
-          if (loadingTimer.current) clearTimeout(loadingTimer.current);
-          return;
-        }
-
-        // 2. Viewport-wide Sampling for Multi-District Support
-        const { sw, ne } = newRegion.bounds || { sw: null, ne: null };
+        // Resolve the center and four corners once, then reuse those results.
         const points = sw ? [
           { lat: newRegion.latitude, lng: newRegion.longitude },
           { lat: sw.lat, lng: sw.lng }, { lat: sw.lat, lng: ne.lng },
-          { lat: ne.lat, lng: sw.lng }, { lat: ne.lat, lng: ne.lng },
-          { lat: sw.lat, lng: newRegion.longitude },
-          { lat: ne.lat, lng: newRegion.longitude },
-          { lat: newRegion.latitude, lng: sw.lng },
-          { lat: newRegion.latitude, lng: ne.lng }
+          { lat: ne.lat, lng: sw.lng }, { lat: ne.lat, lng: ne.lng }
         ] : [{ lat: newRegion.latitude, lng: newRegion.longitude }];
-
-        // Resolve all points in parallel to identify all visible city districts
-        const resolvedResults = await Promise.all(points.map(p => getKakaoRegionCode(p.lat, p.lng)));
+        const resolvedEntries = await resolveViewportRegions(points);
         if (requestId !== regionRequestIdRef.current) return;
-        const uniqueSigungus = Array.from(new Set(resolvedResults.filter(Boolean).map(r => r.sigungu)));
+        const kakaoAddr = resolvedEntries[0]?.region;
+        if (!kakaoAddr) return;
+        const sidoObj = SIDO_LIST.find(s => s.name === kakaoAddr.sido || kakaoAddr.sido.includes(s.name));
+        if (!sidoObj) return;
+        const districts = SIGUNGU_LIST[sidoObj.code] || [];
+        const foundDistrict = districts.find(d => d.name === kakaoAddr.sigungu);
+        if (!foundDistrict) return;
+        const uniqueSigungus = Array.from(new Set(resolvedEntries.map(({ region: item }) => item.sigungu)));
 
         if (mapMode === 'RECOMMENDED') {
           lastFetchCoords.current = { lat: newRegion.latitude, lng: newRegion.longitude };
@@ -301,6 +273,7 @@ export default function HomeMapScreen({ navigation, route }) {
             false,
             region?.daycares || []
           );
+          lastViewportKeyRef.current = viewportKey;
           return;
         }
 
@@ -315,10 +288,11 @@ export default function HomeMapScreen({ navigation, route }) {
             false, 
             partialData
           );
-        });
+        }, resolvedEntries);
         if (requestId !== regionRequestIdRef.current) return;
 
         lastFetchCoords.current = { lat: newRegion.latitude, lng: newRegion.longitude };
+        lastViewportKeyRef.current = viewportKey;
 
         // Final update to context with all resolved data
         InteractionManager.runAfterInteractions(() => {

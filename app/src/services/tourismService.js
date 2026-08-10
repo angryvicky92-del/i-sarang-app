@@ -2,9 +2,11 @@ import Toast from 'react-native-toast-message';
 
 const TOURISM_API_KEY = process.env.EXPO_PUBLIC_TOURISM_API_KEY;
 const BASE_URL = 'https://apis.data.go.kr/B551011/KorService2';
-const RECOMMENDED_CACHE_TTL = 5 * 60 * 1000;
+const RECOMMENDED_CACHE_TTL = 20 * 60 * 1000;
 const ODCLOUD_CACHE_TTL = 60 * 60 * 1000;
 const recommendedCache = new Map();
+const recommendedRequests = new Map();
+const MAX_RECOMMENDED_CACHE_SIZE = 60;
 const geocodeCache = new Map();
 let odcloudCache = { data: null, fetchedAt: 0, promise: null };
 
@@ -65,7 +67,7 @@ const geocodeAddress = async (address) => {
 /**
  * Fetch recommended places based on location.
  */
-export const getRecommendedPlaces = async (lat, lng, radius = 5000, sido = '', sigunguList = '') => {
+const fetchRecommendedPlaces = async (lat, lng, radius = 5000, sido = '', sigunguList = '') => {
   if (!TOURISM_API_KEY) throw new Error('EXPO_PUBLIC_TOURISM_API_KEY is not configured');
   const regions = (Array.isArray(sigunguList) ? sigunguList : [sigunguList]).filter(Boolean).sort();
   const cacheKey = `${Number(lat).toFixed(3)}_${Number(lng).toFixed(3)}_${radius}_${sido}_${regions.join(',')}`;
@@ -233,11 +235,28 @@ export const getRecommendedPlaces = async (lat, lng, radius = 5000, sido = '', s
     });
 
     recommendedCache.set(cacheKey, { data: deduplicated, fetchedAt: Date.now() });
+    if (recommendedCache.size > MAX_RECOMMENDED_CACHE_SIZE) {
+      recommendedCache.delete(recommendedCache.keys().next().value);
+    }
     return deduplicated;
   } catch (error) {
     console.error('getRecommendedPlaces error:', error?.response?.data || error.message);
     Toast.show({ type: 'error', text1: '오류 안내', text2: '데이터 처리 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.' });
     throw error;
+  }
+};
+
+export const getRecommendedPlaces = async (lat, lng, radius = 5000, sido = '', sigunguList = '') => {
+  const regions = (Array.isArray(sigunguList) ? sigunguList : [sigunguList]).filter(Boolean).sort();
+  const requestKey = `${Number(lat).toFixed(3)}_${Number(lng).toFixed(3)}_${radius}_${sido}_${regions.join(',')}`;
+  if (recommendedRequests.has(requestKey)) return recommendedRequests.get(requestKey);
+
+  const request = fetchRecommendedPlaces(lat, lng, radius, sido, sigunguList);
+  recommendedRequests.set(requestKey, request);
+  try {
+    return await request;
+  } finally {
+    recommendedRequests.delete(requestKey);
   }
 };
 
