@@ -28,3 +28,4 @@ dist-ssr
 .expo/
 app/.expo/
 app/.codex-export*/
+app/.codex-*/
