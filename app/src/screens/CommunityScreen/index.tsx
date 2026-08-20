@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { FlatList, TextInput, TouchableOpacity, Text, StyleSheet, RefreshControl, Alert, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Search, Plus, X } from 'lucide-react-native';
@@ -15,12 +15,26 @@ import { usePosts } from './queries/usePosts';
 export const CommunityScreen: React.FC<any> = ({ navigation }) => {
   const { colors, isDarkMode } = useTheme();
   const { profile } = useAuth();
+  const [searchInput, setSearchInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   
   const isRestricted = !profile || profile.user_type === '학부모';
   const [activeTab, setActiveTab] = useState(isRestricted ? '자유' : '전체');
   
   const { data: posts = [], isLoading, refetch, isRefetching } = usePosts(searchQuery, activeTab);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setSearchQuery(searchInput.trim()), 350);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
+
+  const renderPost = useCallback(({ item }: any) => (
+    <PostCard
+      post={item}
+      colors={colors}
+      onPress={() => navigation.navigate('PostDetail', { postId: item.id })}
+    />
+  ), [colors, navigation]);
 
   const handleWritePress = () => {
     if (!profile) {
@@ -45,15 +59,15 @@ export const CommunityScreen: React.FC<any> = ({ navigation }) => {
               style={[styles.searchInput, { color: colors.text }]}
               placeholder="커뮤니티 검색..."
               placeholderTextColor={colors.textMuted}
-              value={searchQuery}
-              onChangeText={setSearchQuery}
+              value={searchInput}
+              onChangeText={setSearchInput}
             />
-            {searchQuery.length > 0 && (
-              <TouchableOpacity onPress={() => setSearchQuery('')} style={{ marginRight: 8 }}>
+            {searchInput.length > 0 && (
+              <TouchableOpacity onPress={() => { setSearchInput(''); setSearchQuery(''); }} style={{ marginRight: 8 }}>
                 <X size={18} color={colors.textMuted} />
               </TouchableOpacity>
             )}
-            <TouchableOpacity onPress={() => refetch()} style={{ paddingHorizontal: 4 }}>
+            <TouchableOpacity onPress={() => setSearchQuery(searchInput.trim())} style={{ paddingHorizontal: 4 }}>
               <Search size={20} color={colors.primary} />
             </TouchableOpacity>
           </View>
@@ -86,13 +100,11 @@ export const CommunityScreen: React.FC<any> = ({ navigation }) => {
       <FlatList
         data={posts}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <PostCard 
-            post={item} 
-            colors={colors} 
-            onPress={() => navigation.navigate('PostDetail', { postId: item.id })} 
-          />
-        )}
+        renderItem={renderPost}
+        initialNumToRender={10}
+        maxToRenderPerBatch={10}
+        windowSize={7}
+        removeClippedSubviews
         contentContainerStyle={{ paddingBottom: 100 }}
         refreshControl={
           <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={colors.primary} />

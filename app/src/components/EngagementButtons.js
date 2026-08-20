@@ -63,7 +63,7 @@ export default function EngagementButtons({ targetType, targetId, item, userVote
 
     setLoading(true);
     try {
-      const result = await toggleVote(targetType, targetId, userId, voteType);
+      const result = await toggleVote(targetType, targetId, voteType);
       if (!result) {
         // Rollback on failure
         onUpdate && onUpdate({

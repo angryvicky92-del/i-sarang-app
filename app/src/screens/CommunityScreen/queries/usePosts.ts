@@ -9,7 +9,8 @@ export const usePosts = (searchQuery: string, activeTab: string) => {
         .from('posts')
         .select('*')
         .order('is_notice', { ascending: false })
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(50);
       
       if (searchQuery) {
         query = query.or(`title.ilike.%${searchQuery}%,content.ilike.%${searchQuery}%`);
@@ -24,5 +25,6 @@ export const usePosts = (searchQuery: string, activeTab: string) => {
       if (error) throw error;
       return data;
     },
+    staleTime: 2 * 60 * 1000,
   });
 };

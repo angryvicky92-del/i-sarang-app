@@ -1,13 +1,24 @@
+/* global process */
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { WebView } from 'react-native-webview';
 
 // The Javascript Kakao API key found in the web version's index.html
-const KAKAO_JS_KEY = process.env.EXPO_PUBLIC_KAKAO_JS_KEY || 'dc33fe7753b02b59868630ccbfd7b820';
+const KAKAO_JS_KEY = process.env.EXPO_PUBLIC_KAKAO_JS_KEY;
 
 export default function KakaoRoadview({ lat, lng }) {
-  // We use baseUrl 'http://localhost' to bypass Kakao's domain restrictions
-  // assuming 'http://localhost' is registered in the user's Kakao Dev Console.
+  const hasCoordinates = Number.isFinite(Number(lat)) && Number.isFinite(Number(lng));
+  if (!KAKAO_JS_KEY || !hasCoordinates) {
+    return (
+      <View style={[styles.container, styles.fallback]}>
+        <Text style={styles.fallbackText}>
+          {!KAKAO_JS_KEY ? '지도 API 설정이 필요합니다.' : '로드뷰 좌표 정보가 없습니다.'}
+        </Text>
+      </View>
+    );
+  }
+
+  // Use the HTTPS host registered for this JavaScript key in Kakao Developers.
   const htmlContent = `
     <!DOCTYPE html>
     <html>
@@ -26,7 +37,7 @@ export default function KakaoRoadview({ lat, lng }) {
           const rvContainer = document.getElementById('roadview');
           const rv = new kakao.maps.Roadview(rvContainer);
           const rvClient = new kakao.maps.RoadviewClient();
-          const position = new kakao.maps.LatLng(${lat}, ${lng});
+          const position = new kakao.maps.LatLng(${Number(lat)}, ${Number(lng)});
 
           // Get the nearest roadview panoId within 50 meters
           rvClient.getNearestPanoId(position, 50, function(panoId) {
@@ -51,16 +62,16 @@ export default function KakaoRoadview({ lat, lng }) {
   return (
     <View style={styles.container}>
       <WebView
-        originWhitelist={['*']}
-        source={{ html: htmlContent, baseUrl: 'http://localhost' }}
+        originWhitelist={['about:blank', 'https://roject-946a273f-869e-48da-a0e.web.app', 'https://*.kakao.com', 'https://*.kakaocdn.net', 'https://*.daumcdn.net']}
+        source={{ html: htmlContent, baseUrl: 'https://roject-946a273f-869e-48da-a0e.web.app' }}
         style={styles.webview}
         scrollEnabled={false}
         bounces={false}
         javaScriptEnabled={true}
         domStorageEnabled={true}
         mixedContentMode="always"
-        allowFileAccess={true}
-        allowUniversalAccessFromFileURLs={true}
+        allowFileAccess={false}
+        allowUniversalAccessFromFileURLs={false}
         pointerEvents="auto"
       />
     </View>
@@ -78,5 +89,7 @@ const styles = StyleSheet.create({
   webview: {
     flex: 1,
     backgroundColor: 'transparent',
-  }
+  },
+  fallback: { alignItems: 'center', justifyContent: 'center' },
+  fallbackText: { color: '#64748B', fontSize: 13 }
 });

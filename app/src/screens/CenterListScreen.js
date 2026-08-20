@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSearch } from '../contexts/SearchContext';
@@ -21,13 +21,20 @@ export default function CenterListScreen({ navigation, route }) {
 
   const [displayCount, setDisplayCount] = useState(10);
 
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      setFilters(prev => prev.nameQuery === searchQuery ? prev : { ...prev, nameQuery: searchQuery });
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [searchQuery, setFilters]);
+
   const activeFilterCount = (filters.types.length > 0 ? 1 : 0) + 
                              (filters.minRating > 0 ? 1 : 0) + 
                              (filters.busOnly ? 1 : 0) + 
                              (filters.hiringOnly ? 1 : 0) + 
                              (filters.services.length > 0 ? 1 : 0);
 
-  const renderItem = ({ item, index }) => (
+  const renderItem = useCallback(({ item, index }) => (
     <>
       <TouchableOpacity 
         style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]} 
@@ -59,10 +66,13 @@ export default function CenterListScreen({ navigation, route }) {
       </TouchableOpacity>
       {(index + 1) % 5 === 0 && <AdBanner style={{ marginBottom: 16 }} />}
     </>
-  );
+  ), [colors, isDarkMode, navigation]);
 
-  const listData = activeTab === 'all' ? daycares : favorites.map(f => f.metadata);
-  const paginatedData = listData.slice(0, displayCount);
+  const listData = useMemo(
+    () => activeTab === 'all' ? daycares : favorites.map(f => f.metadata).filter(Boolean),
+    [activeTab, daycares, favorites]
+  );
+  const paginatedData = useMemo(() => listData.slice(0, displayCount), [listData, displayCount]);
 
   // Reset pagination on region or tab change, and handle incoming tab param
   React.useEffect(() => {
@@ -82,7 +92,6 @@ export default function CenterListScreen({ navigation, route }) {
 
   const handleSearch = (text) => {
     setSearchQuery(text);
-    setFilters(prev => ({ ...prev, nameQuery: text }));
   };
 
   const clearSearch = () => {
@@ -168,6 +177,10 @@ export default function CenterListScreen({ navigation, route }) {
           contentContainerStyle={styles.list}
           onEndReached={() => setDisplayCount(prev => prev + 10)}
           onEndReachedThreshold={0.5}
+          initialNumToRender={10}
+          maxToRenderPerBatch={10}
+          windowSize={7}
+          removeClippedSubviews
           ListEmptyComponent={
             <View style={styles.emptyWrap}>
               <Text style={[styles.emptyText, { color: colors.textMuted }]}>

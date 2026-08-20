@@ -1,11 +1,11 @@
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Platform, InteractionManager, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Platform, InteractionManager, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Star, Map as MapIcon, Navigation, Search, ChevronDown, Info, SlidersHorizontal, Heart } from 'lucide-react-native';
 import * as Location from 'expo-location';
 import { useSearch } from '../contexts/SearchContext';
 import { useTheme } from '../contexts/ThemeContext';
-import { getKakaoRegionCode, TYPE_COLORS, PLACE_TYPE_COLORS, SIDO_LIST } from '../services/dataService';
+import { getKakaoRegionCode, resolveViewportRegions, TYPE_COLORS, PLACE_TYPE_COLORS, SIDO_LIST } from '../services/dataService';
 import { SIGUNGU_LIST } from '../services/sigungu';
 import LocationBottomSheet from '../components/LocationBottomSheet';
 import KakaoMapWebView from '../components/KakaoMapWebView';
@@ -16,6 +16,7 @@ import { getReviewAverages } from '../services/reviewService';
 import { getRecommendedPlaces } from '../services/tourismService';
 import RatingStars from '../components/RatingStars';
 import { Linking } from 'react-native';
+import Toast from 'react-native-toast-message';
 
 
 
@@ -27,7 +28,7 @@ export default function HomeMapScreen({ navigation, route }) {
   } = useSearch();
   const { colors, isDarkMode } = useTheme();
   const [selectedDaycare, setSelectedDaycare] = useState(null);
-  const [mapMode, setMapMode] = useState('DAYCARE');
+  const [mapMode, setMapMode] = useState(route?.params?.mode === 'RECOMMENDED' ? 'RECOMMENDED' : 'DAYCARE');
   const [userLocation, setUserLocation] = useState(null);
   const [isLocating, setIsLocating] = useState(false);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
@@ -37,8 +38,9 @@ export default function HomeMapScreen({ navigation, route }) {
   const isFirstMount = useRef(true);
   const [isFetching, setIsFetching] = useState(false);
   const webviewRef = useRef(null);
-
-  const THRESHOLD = 0.002; // Roughly 200m threshold to prevent constant refetching on minor moves
+  const regionRequestIdRef = useRef(0);
+  const placesRequestIdRef = useRef(0);
+  const lastViewportKeyRef = useRef('');
 
   const fetchItemRatings = useCallback(async (item) => {
     if (!item) return;
@@ -81,18 +83,31 @@ export default function HomeMapScreen({ navigation, route }) {
     setSelectedDaycare(null);
   }, [mapMode]);
 
+  useEffect(() => {
+    if (route?.params?.mode === 'RECOMMENDED' || route?.params?.mode === 'DAYCARE') {
+      setMapMode(route.params.mode);
+      navigation.setParams({ mode: undefined });
+    }
+  }, [route?.params?.mode, navigation]);
+
   // Fetch Recommended Places
   useEffect(() => {
-    if (mapMode === 'RECOMMENDED' && region?.center) {
-      // Calculate radius to cover viewport corners
-      const radius = 5000; // Keep 5km for performance, but pass multiple sigungus for ODCLOUD
-      getRecommendedPlaces(region.center.lat, region.center.lng, radius, region?.sido, region?.visibleRegions || [region?.sigungu]).then(data => {
-        if (data && data.length > 0) {
-          setMapPlaces(data);
-        }
+    if (mapMode !== 'RECOMMENDED' || !region?.center) return undefined;
+    const requestId = ++placesRequestIdRef.current;
+    const sigungus = region?.visibleRegions?.length ? region.visibleRegions : [region?.sigungu].filter(Boolean);
+    getRecommendedPlaces(region.center.lat, region.center.lng, 5000, region?.sido, sigungus)
+      .then(data => {
+        if (requestId === placesRequestIdRef.current) setMapPlaces(data || []);
+      })
+      .catch(error => {
+        if (requestId !== placesRequestIdRef.current) return;
+        console.warn('Recommended places fetch failed:', error.message);
+        Toast.show({ type: 'error', text1: '장소 추천 오류', text2: '현재 지역의 추천 장소를 불러오지 못했습니다.' });
       });
-    }
-  }, [mapMode, region, setMapPlaces]);
+    return () => {
+      if (requestId === placesRequestIdRef.current) placesRequestIdRef.current += 1;
+    };
+  }, [mapMode, region?.center?.lat, region?.center?.lng, region?.sido, region?.sigungu, region?.visibleRegions, setMapPlaces]);
 
   const selectedRecommendedIdFromNav = route?.params?.selectedRecommendedPlaceId;
   const navLat = route?.params?.lat;
@@ -167,22 +182,25 @@ export default function HomeMapScreen({ navigation, route }) {
 
   const daycareMarkers = useMemo(() => {
     if (mapMode !== 'DAYCARE') return [];
-    return filteredMapDaycares.map(dc => ({ 
+    return filteredMapDaycares
+      .filter(dc => Number.isFinite(dc.lat) && Number.isFinite(dc.lng))
+      .map(dc => ({
       id: dc.id, 
       lat: dc.lat, 
       lng: dc.lng, 
       name: dc.name, 
+      district: dc.office || dc.addr?.split(' ')[1] || '',
       type: dc.type, 
       color: dc.color, 
       isFavorite: isFavorited(dc.stcode), 
       isRecommended: false 
-    }));
+      }));
   }, [filteredMapDaycares, mapMode, isFavorited]);
 
   const placeMarkers = useMemo(() => {
     if (mapMode !== 'RECOMMENDED') return [];
     return mapPlaces
-      .filter(rp => rp.isKidsFriendly)
+      .filter(rp => rp.isKidsFriendly && Number.isFinite(Number(rp.lat)) && Number.isFinite(Number(rp.lng)))
       .map(rp => ({
         id: rp.id, 
         lat: rp.lat, 
@@ -199,72 +217,69 @@ export default function HomeMapScreen({ navigation, route }) {
   const debounceTimer = useRef(null);
   const loadingTimer = useRef(null);
 
+  useEffect(() => () => {
+    if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    if (loadingTimer.current) clearTimeout(loadingTimer.current);
+  }, []);
+
   const handleRegionChange = useCallback(async (newRegion) => {
+    const requestId = ++regionRequestIdRef.current;
     // Clear existing timers
     if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    if (loadingTimer.current) clearTimeout(loadingTimer.current);
     
     // Set a new timer for debounce (600ms)
     debounceTimer.current = setTimeout(async () => {
       try {
-        if (selectedDaycare || clusterDaycares || isFetching) return;
-        
         const now = Date.now();
         if (now - lastProgrammaticMove.current < 1500) return;
         if (!newRegion?.latitude) return;
 
-        // Distance check to prevent spamming on minor moves
-        const dist = Math.sqrt(
-          Math.pow(newRegion.latitude - (lastFetchCoords.current?.lat || 0), 2) +
-          Math.pow(newRegion.longitude - (lastFetchCoords.current?.lng || 0), 2)
-        );
+        const { sw, ne } = newRegion.bounds || { sw: null, ne: null };
+        const viewportKey = sw && ne
+          ? [sw.lat, sw.lng, ne.lat, ne.lng].map(value => Number(value).toFixed(3)).join(':') + `:${newRegion.level || ''}:${mapMode}`
+          : `${Number(newRegion.latitude).toFixed(3)}:${Number(newRegion.longitude).toFixed(3)}:${mapMode}`;
+        if (viewportKey === lastViewportKeyRef.current) return;
         
-        // If move is very minor (less than ~200m), skip refetch
-        if (dist < THRESHOLD && lastFetchCoords.current?.lat !== 0) return;
-        
-        lastFetchCoords.current = { lat: newRegion.latitude, lng: newRegion.longitude };
-
         // Only show top loading bar if we have data, otherwise full overlay
         // Delay showing loader to avoid flickering on very fast responses
         if (loadingTimer.current) clearTimeout(loadingTimer.current);
         loadingTimer.current = setTimeout(() => setIsFetching(true), 150);
 
-        // 1. Resolve Primary Region (Map Center)
-        const kakaoAddr = await getKakaoRegionCode(newRegion.latitude, newRegion.longitude);
-        if (!kakaoAddr) {
-          setIsFetching(false);
-          if (loadingTimer.current) clearTimeout(loadingTimer.current);
-          return;
-        }
-
-        const sidoObj = SIDO_LIST.find(s => s.name === kakaoAddr.sido || kakaoAddr.sido.includes(s.name));
-        if (!sidoObj) {
-          setIsFetching(false);
-          if (loadingTimer.current) clearTimeout(loadingTimer.current);
-          return;
-        }
-
-        const districts = SIGUNGU_LIST[sidoObj.code] || [];
-        const foundDistrict = districts.find(d => d.name === kakaoAddr.sigungu);
-        if (!foundDistrict) {
-          setIsFetching(false);
-          if (loadingTimer.current) clearTimeout(loadingTimer.current);
-          return;
-        }
-
-        // 2. Viewport-wide Sampling for Multi-District Support
-        const { sw, ne } = newRegion.bounds || { sw: null, ne: null };
+        // Resolve the center and four corners once, then reuse those results.
         const points = sw ? [
           { lat: newRegion.latitude, lng: newRegion.longitude },
           { lat: sw.lat, lng: sw.lng }, { lat: sw.lat, lng: ne.lng },
           { lat: ne.lat, lng: sw.lng }, { lat: ne.lat, lng: ne.lng }
         ] : [{ lat: newRegion.latitude, lng: newRegion.longitude }];
+        const resolvedEntries = await resolveViewportRegions(points);
+        if (requestId !== regionRequestIdRef.current) return;
+        const kakaoAddr = resolvedEntries[0]?.region;
+        if (!kakaoAddr) return;
+        const sidoObj = SIDO_LIST.find(s => s.name === kakaoAddr.sido || kakaoAddr.sido.includes(s.name));
+        if (!sidoObj) return;
+        const districts = SIGUNGU_LIST[sidoObj.code] || [];
+        const foundDistrict = districts.find(d => d.name === kakaoAddr.sigungu);
+        if (!foundDistrict) return;
+        const uniqueSigungus = Array.from(new Set(resolvedEntries.map(({ region: item }) => item.sigungu)));
 
-        // Resolve all points in parallel to identify all visible city districts
-        const resolvedResults = await Promise.all(points.map(p => getKakaoRegionCode(p.lat, p.lng)));
-        const uniqueSigungus = Array.from(new Set(resolvedResults.filter(Boolean).map(r => r.sigungu)));
+        if (mapMode === 'RECOMMENDED') {
+          lastFetchCoords.current = { lat: newRegion.latitude, lng: newRegion.longitude };
+          updateRegion(
+            sidoObj.name,
+            uniqueSigungus,
+            foundDistrict.code,
+            { lat: newRegion.latitude, lng: newRegion.longitude },
+            false,
+            region?.daycares || []
+          );
+          lastViewportKeyRef.current = viewportKey;
+          return;
+        }
 
         // 3. Fetch Data for all detected regions
         let multiData = await getMultiRegionDaycares(points, (partialData) => {
+          if (requestId !== regionRequestIdRef.current) return;
           updateRegion(
             sidoObj.name, 
             uniqueSigungus, 
@@ -273,10 +288,15 @@ export default function HomeMapScreen({ navigation, route }) {
             false, 
             partialData
           );
-        });
+        }, resolvedEntries);
+        if (requestId !== regionRequestIdRef.current) return;
+
+        lastFetchCoords.current = { lat: newRegion.latitude, lng: newRegion.longitude };
+        lastViewportKeyRef.current = viewportKey;
 
         // Final update to context with all resolved data
         InteractionManager.runAfterInteractions(() => {
+          if (requestId !== regionRequestIdRef.current) return;
           updateRegion(
             sidoObj.name, 
             uniqueSigungus, 
@@ -289,11 +309,13 @@ export default function HomeMapScreen({ navigation, route }) {
       } catch (error) {
         console.error('Region change error:', error);
       } finally {
-        if (loadingTimer.current) clearTimeout(loadingTimer.current);
-        setIsFetching(false);
+        if (requestId === regionRequestIdRef.current) {
+          if (loadingTimer.current) clearTimeout(loadingTimer.current);
+          setIsFetching(false);
+        }
       }
     }, 600);
-  }, [selectedDaycare, clusterDaycares, isFetching, updateRegion]);
+  }, [mapMode, region?.daycares, updateRegion]);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -520,18 +542,25 @@ export default function HomeMapScreen({ navigation, route }) {
           if (isLocating) return;
           setIsLocating(true);
           try {
-            const { status } = await Location.requestForegroundPermissionsAsync();
+            const currentPermission = await Location.getForegroundPermissionsAsync();
+            const { status } = currentPermission.status === 'granted'
+              ? currentPermission
+              : await Location.requestForegroundPermissionsAsync();
             if (status !== 'granted') {
               alert('위치 권한이 필요합니다.');
               setIsLocating(false);
               return;
             }
             
-            // Get position with Balanced accuracy for speed, High can be slow
-            const location = await Location.getCurrentPositionAsync({ 
-                accuracy: Location.Accuracy.Balanced,
-                timeout: 5000 
+            const lastKnown = await Location.getLastKnownPositionAsync({
+              maxAge: 120000,
+              requiredAccuracy: 1000,
             });
+            const location = await Promise.race([
+              Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
+              new Promise((resolve) => setTimeout(() => resolve(lastKnown), 8000)),
+            ]);
+            if (!location) throw new Error('현재 위치를 확인할 수 없습니다.');
             const { latitude, longitude } = location.coords;
             setUserLocation({ lat: latitude, lng: longitude });
             
@@ -551,6 +580,7 @@ export default function HomeMapScreen({ navigation, route }) {
             }
           } catch (e) { 
             console.warn('My Locate fail', e); 
+            Alert.alert('위치 확인 실패', e?.message || 'GPS를 켠 후 다시 시도해 주세요.');
           } finally {
             setIsLocating(false);
           }

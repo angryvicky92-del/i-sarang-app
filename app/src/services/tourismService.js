@@ -1,18 +1,83 @@
 import Toast from 'react-native-toast-message';
-import axios from 'axios';
 
 const TOURISM_API_KEY = process.env.EXPO_PUBLIC_TOURISM_API_KEY;
 const BASE_URL = 'https://apis.data.go.kr/B551011/KorService2';
+const RECOMMENDED_CACHE_TTL = 20 * 60 * 1000;
+const ODCLOUD_CACHE_TTL = 60 * 60 * 1000;
+const recommendedCache = new Map();
+const recommendedRequests = new Map();
+const MAX_RECOMMENDED_CACHE_SIZE = 60;
+const geocodeCache = new Map();
+let odcloudCache = { data: null, fetchedAt: 0, promise: null };
+
+const fetchJson = async (url, params, options = {}) => {
+  const query = new URLSearchParams(params).toString();
+  const response = await fetch(`${url}?${query}`, options);
+  if (!response.ok) throw new Error(`HTTP ${response.status} from ${url}`);
+  return response.json();
+};
+
+const getOdcloudPlaces = async () => {
+  const now = Date.now();
+  if (odcloudCache.data && now - odcloudCache.fetchedAt < ODCLOUD_CACHE_TTL) return odcloudCache.data;
+  if (odcloudCache.promise) return odcloudCache.promise;
+
+  odcloudCache.promise = fetchJson(
+    'https://api.odcloud.kr/api/15091145/v1/uddi:6da3f4cb-eaac-42c5-9500-cfdf76c9496b',
+    { serviceKey: decodeURIComponent(TOURISM_API_KEY), page: 1, perPage: 3000 }
+  ).then(result => {
+    odcloudCache = { data: Array.isArray(result?.data) ? result.data : [], fetchedAt: Date.now(), promise: null };
+    return odcloudCache.data;
+  }).catch(error => {
+    odcloudCache.promise = null;
+    throw error;
+  });
+  return odcloudCache.promise;
+};
+
+const mapWithConcurrency = async (items, limit, mapper) => {
+  const results = new Array(items.length);
+  let nextIndex = 0;
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (nextIndex < items.length) {
+      const index = nextIndex++;
+      results[index] = await mapper(items[index], index);
+    }
+  }));
+  return results;
+};
+
+const geocodeAddress = async (address) => {
+  if (!address || !process.env.EXPO_PUBLIC_KAKAO_REST_API_KEY) return null;
+  if (geocodeCache.has(address)) return geocodeCache.get(address);
+  const result = await fetchJson(
+    'https://dapi.kakao.com/v2/local/search/address.json',
+    { query: address },
+    { headers: { Authorization: `KakaoAK ${process.env.EXPO_PUBLIC_KAKAO_REST_API_KEY}` } }
+  );
+  const document = result?.documents?.[0];
+  const coordinates = document ? { lat: Number(document.y), lng: Number(document.x) } : null;
+  if (coordinates && Number.isFinite(coordinates.lat) && Number.isFinite(coordinates.lng)) {
+    geocodeCache.set(address, coordinates);
+    return coordinates;
+  }
+  return null;
+};
 
 /**
  * Fetch recommended places based on location.
  */
-export const getRecommendedPlaces = async (lat, lng, radius = 5000, sido = '', sigunguList = '') => {
+const fetchRecommendedPlaces = async (lat, lng, radius = 5000, sido = '', sigunguList = '') => {
+  if (!TOURISM_API_KEY) throw new Error('EXPO_PUBLIC_TOURISM_API_KEY is not configured');
+  const regions = (Array.isArray(sigunguList) ? sigunguList : [sigunguList]).filter(Boolean).sort();
+  const cacheKey = `${Number(lat).toFixed(3)}_${Number(lng).toFixed(3)}_${radius}_${sido}_${regions.join(',')}`;
+  const cached = recommendedCache.get(cacheKey);
+  if (cached && Date.now() - cached.fetchedAt < RECOMMENDED_CACHE_TTL) return cached.data;
+
   try {
-    const tourismReq = axios.get(`${BASE_URL}/locationBasedList2`, {
-      params: {
+    const tourismReq = fetchJson(`${BASE_URL}/locationBasedList2`, {
         serviceKey: decodeURIComponent(TOURISM_API_KEY),
-        numOfRows: 50,
+        numOfRows: 1000,
         pageNo: 1,
         MobileOS: 'ETC',
         MobileApp: 'ChildcareApp',
@@ -20,25 +85,21 @@ export const getRecommendedPlaces = async (lat, lng, radius = 5000, sido = '', s
         arrange: 'O', // O = Sort by Distance (거리순)
         mapX: lng,
         mapY: lat,
-        radius: radius,
-      }
+        radius,
     });
-
-    const odcloudReq = axios.get(`https://api.odcloud.kr/api/15091145/v1/uddi:6da3f4cb-eaac-42c5-9500-cfdf76c9496b`, {
-      params: {
-        serviceKey: decodeURIComponent(TOURISM_API_KEY),
-        page: 1,
-        perPage: 3000
-      }
-    });
+    const odcloudReq = getOdcloudPlaces();
 
     const [tourRes, odRes] = await Promise.allSettled([tourismReq, odcloudReq]);
 
     let items = [];
     if (tourRes.status === 'fulfilled') {
-      const tourItems = tourRes.value.data?.response?.body?.items?.item;
+      const tourItems = tourRes.value?.response?.body?.items?.item;
       if (Array.isArray(tourItems)) items = tourItems;
+    } else {
+      console.warn('Tourism recommendation request failed:', tourRes.reason?.message);
     }
+
+    if (tourRes.status === 'rejected' && odRes.status === 'rejected') throw tourRes.reason;
 
     const kidsKeywords = ['어린이', '키즈', '체험', '동물원', '식물원', '테마파크', '놀이공원', '놀이동산', '아쿠아', '박물관', '과학관', '생태', '농장', '장난감', '미술관', '어린이집', '키즈카페', '수목원', '공룡', '천문대', '전시관', '상상', '꿈터', '숲체험', '공원', '놀이'];
     
@@ -79,30 +140,24 @@ export const getRecommendedPlaces = async (lat, lng, radius = 5000, sido = '', s
 
     // Process ODCLOUD Kids Cafes and Amusement Parks
     if (odRes.status === 'fulfilled' && sido && sigunguList) {
-      const allOdPlaces = odRes.value.data?.data;
+      const allOdPlaces = odRes.value;
       if (Array.isArray(allOdPlaces)) {
         // Filter those located in the current district(s)
         const shortSido = sido.substring(0, 2);
-        const sList = Array.isArray(sigunguList) ? sigunguList : [sigunguList];
+        const sList = regions;
 
         const localOdPlaces = allOdPlaces.filter(p => {
           const addr = p['기본주소'] || '';
           return addr.includes(shortSido) && sList.some(s => addr.includes(s));
         });
 
-        const kakaoHeaders = { Authorization: `KakaoAK ${process.env.EXPO_PUBLIC_KAKAO_REST_API_KEY}` };
-        
-        // Dynamically geocode them and merge
-        const odPlacesMapped = await Promise.all(localOdPlaces.map(async (p, idx) => {
-           let plat = lat; let plng = lng;
+        // Limit Kakao calls and never place a failed geocode at the map center.
+        const odPlacesMapped = await mapWithConcurrency(localOdPlaces, 5, async (p, idx) => {
            const addr = p['기본주소'];
            try {
-             const geoRes = await axios.get(`https://dapi.kakao.com/v2/local/search/address.json?query=${encodeURIComponent(addr)}`, { headers: kakaoHeaders });
-             if (geoRes.data?.documents?.length > 0) {
-                plng = parseFloat(geoRes.data.documents[0].x);
-                plat = parseFloat(geoRes.data.documents[0].y);
-             }
-           } catch(e) {}
+             const coordinates = await geocodeAddress(addr);
+             if (!coordinates) return null;
+             const { lat: plat, lng: plng } = coordinates;
            
            // Simple Haversine-like distance calculation
            const deg2rad = (deg) => deg * (Math.PI/180);
@@ -114,7 +169,7 @@ export const getRecommendedPlaces = async (lat, lng, radius = 5000, sido = '', s
            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
            const distance = 6371 * c * 1000; // Distance in meters
 
-           return {
+             return {
              id: `odcloud_${p['번호'] || idx}`,
              title: p['영업소명'],
              type: '키즈카페',
@@ -130,11 +185,17 @@ export const getRecommendedPlaces = async (lat, lng, radius = 5000, sido = '', s
              bizStatus: p['영업소상태'],
              bizType: p['유원시설업종류'],
              licenseDate: p['허가일자(종합/일반)'] || p['신고일자(기타)']
-           };
-        }));
+             };
+           } catch (error) {
+             console.warn('Recommended place geocoding failed:', error.message);
+             return null;
+           }
+        });
         
-        combinedPlaces = [...combinedPlaces, ...odPlacesMapped];
+        combinedPlaces = [...combinedPlaces, ...odPlacesMapped.filter(Boolean)];
       }
+    } else if (odRes.status === 'rejected') {
+      console.warn('ODCloud recommendation request failed:', odRes.reason?.message);
     }
 
     // Deduplicate and Merge
@@ -145,7 +206,7 @@ export const getRecommendedPlaces = async (lat, lng, radius = 5000, sido = '', s
     const normTitle = (t) => (t || '').replace(/\s+/g, '').replace(/키즈카페|어린이집|장소|테마파크|영업소|지점|본점|점/g, '');
     const normAddr = (a) => (a || '').substring(0, 15).replace(/\s+/g, '');
 
-    combinedPlaces.forEach(p => {
+    combinedPlaces.filter(p => Number.isFinite(p.lat) && Number.isFinite(p.lng)).forEach(p => {
       const nt = normTitle(p.title);
       const na = normAddr(p.addr);
       const key = `${nt}_${na}`;
@@ -173,11 +234,29 @@ export const getRecommendedPlaces = async (lat, lng, radius = 5000, sido = '', s
       deduplicated.push(p);
     });
 
+    recommendedCache.set(cacheKey, { data: deduplicated, fetchedAt: Date.now() });
+    if (recommendedCache.size > MAX_RECOMMENDED_CACHE_SIZE) {
+      recommendedCache.delete(recommendedCache.keys().next().value);
+    }
     return deduplicated;
   } catch (error) {
     console.error('getRecommendedPlaces error:', error?.response?.data || error.message);
     Toast.show({ type: 'error', text1: '오류 안내', text2: '데이터 처리 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.' });
-    return [];
+    throw error;
+  }
+};
+
+export const getRecommendedPlaces = async (lat, lng, radius = 5000, sido = '', sigunguList = '') => {
+  const regions = (Array.isArray(sigunguList) ? sigunguList : [sigunguList]).filter(Boolean).sort();
+  const requestKey = `${Number(lat).toFixed(3)}_${Number(lng).toFixed(3)}_${radius}_${sido}_${regions.join(',')}`;
+  if (recommendedRequests.has(requestKey)) return recommendedRequests.get(requestKey);
+
+  const request = fetchRecommendedPlaces(lat, lng, radius, sido, sigunguList);
+  recommendedRequests.set(requestKey, request);
+  try {
+    return await request;
+  } finally {
+    recommendedRequests.delete(requestKey);
   }
 };
 
@@ -193,34 +272,28 @@ export const getPlaceDetail = async (contentId, originalPlace = null) => {
   }
 
   try {
-    // 1. Fetch Common Detail (Overview, Title, Basic Info)
-    const commonRes = await axios.get(`${BASE_URL}/detailCommon2`, {
-      params: {
+    const [commonRes, introRes] = await Promise.all([
+      fetchJson(`${BASE_URL}/detailCommon2`, {
         serviceKey: decodeURIComponent(TOURISM_API_KEY),
         MobileOS: 'ETC',
         MobileApp: 'ChildcareApp',
         _type: 'json',
-        contentId: contentId,
-        // In KorService2, these YN params are invalid or unnecessary for detailCommon2
-      }
-    });
-
-    // 2. Fetch Introduction Detail (Content Specific: opening hours, fees, parking, etc.)
-    const introRes = await axios.get(`${BASE_URL}/detailIntro2`, {
-      params: {
+        contentId,
+      }),
+      fetchJson(`${BASE_URL}/detailIntro2`, {
         serviceKey: decodeURIComponent(TOURISM_API_KEY),
         MobileOS: 'ETC',
         MobileApp: 'ChildcareApp',
         _type: 'json',
-        contentId: contentId,
+        contentId,
         contentTypeId: originalPlace?.contentTypeId || '12',
-      }
-    });
+      })
+    ]);
 
-    const commonItemRaw = commonRes.data?.response?.body?.items?.item;
+    const commonItemRaw = commonRes?.response?.body?.items?.item;
     const commonItem = Array.isArray(commonItemRaw) ? commonItemRaw[0] : commonItemRaw;
 
-    const introItemRaw = introRes.data?.response?.body?.items?.item;
+    const introItemRaw = introRes?.response?.body?.items?.item;
     const introItem = Array.isArray(introItemRaw) ? introItemRaw[0] : introItemRaw;
 
     if (commonItem) {

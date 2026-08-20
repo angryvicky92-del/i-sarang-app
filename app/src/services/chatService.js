@@ -61,10 +61,11 @@ export const getMessages = async (chatId) => {
       .from('chat_messages')
       .select('*')
       .eq('chat_id', chatId)
-      .order('created_at', { ascending: true });
+      .order('created_at', { ascending: false })
+      .limit(50);
 
     if (error) throw error;
-    return data || [];
+    return (data || []).reverse();
   } catch (error) {
     console.error('Error fetching messages:', error.message);
     Toast.show({ type: 'error', text1: '오류 안내', text2: '데이터 처리 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.' });

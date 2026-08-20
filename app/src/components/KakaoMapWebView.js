@@ -1,19 +1,22 @@
+/* global process */
 import React, { useRef, useEffect, useMemo, useState, useCallback } from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { WebView } from 'react-native-webview';
 
-const KAKAO_JS_KEY = process.env.EXPO_PUBLIC_KAKAO_JS_KEY || 'dc33fe7753b02b59868630ccbfd7b820';
+const KAKAO_JS_KEY = process.env.EXPO_PUBLIC_KAKAO_JS_KEY;
 
 export default function KakaoMapWebView({ center, animateTick, markers, userLocation, selectedId, isDarkMode, onRegionChange, onMarkerPress, onClusterClick, onMapPress }) {
   const webviewRef = useRef(null);
   const [isMapReady, setIsMapReady] = useState(false);
+  const [mapError, setMapError] = useState(null);
 
   // 1. Update full marker set only when data changes
-  const prevMarkersRef = useRef(null);
+  const prevMarkersSignatureRef = useRef('');
   useEffect(() => {
-    if (webviewRef.current && isMapReady && markers !== prevMarkersRef.current) {
-      prevMarkersRef.current = markers;
+    if (webviewRef.current && isMapReady) {
       const markersJson = JSON.stringify(markers || []);
+      if (markersJson === prevMarkersSignatureRef.current) return;
+      prevMarkersSignatureRef.current = markersJson;
       webviewRef.current.injectJavaScript(`
         if (window.updateMarkers) {
            window.updateMarkers(${markersJson});
@@ -26,9 +29,10 @@ export default function KakaoMapWebView({ center, animateTick, markers, userLoca
   // 2. Fast highlight for selected marker
   useEffect(() => {
     if (webviewRef.current && isMapReady) {
+      const selectedIdJson = JSON.stringify(selectedId || '');
       webviewRef.current.injectJavaScript(`
         if (window.selectMarker) {
-           window.selectMarker("${selectedId || ''}");
+           window.selectMarker(${selectedIdJson});
         }
         true;
       `);
@@ -60,9 +64,9 @@ export default function KakaoMapWebView({ center, animateTick, markers, userLoca
 
   // When center updates from context, pass it to webview
   // We only panTo if animateTick has changed (explicit movement request)
-  const lastAnimateTick = useRef(animateTick);
+  const lastAnimateTick = useRef(null);
   useEffect(() => {
-    if (webviewRef.current && center && animateTick !== lastAnimateTick.current) {
+    if (webviewRef.current && isMapReady && center && animateTick && animateTick !== lastAnimateTick.current) {
       lastAnimateTick.current = animateTick;
       const moveScript = `
         if (window.map) {
@@ -73,7 +77,7 @@ export default function KakaoMapWebView({ center, animateTick, markers, userLoca
       `;
       webviewRef.current.injectJavaScript(moveScript);
     }
-  }, [animateTick, center]); 
+  }, [animateTick, center, isMapReady]);
 
   // Initial load or major center jumps without animation
   useEffect(() => {
@@ -153,7 +157,11 @@ export default function KakaoMapWebView({ center, animateTick, markers, userLoca
           z-index: 1000;
         }
       </style>
-      <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=${KAKAO_JS_KEY}&libraries=clusterer&autoload=false"></script>
+      <script
+        type="text/javascript"
+        src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=${KAKAO_JS_KEY}&libraries=clusterer&autoload=false"
+        onerror="window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'MAP_ERROR', message: 'Kakao SDK load failed' }))"
+      ></script>
     </head>
     <body class="">
       <div id="map"></div>
@@ -168,7 +176,12 @@ export default function KakaoMapWebView({ center, animateTick, markers, userLoca
         window.lastSelectedId = null;
         window.userMarker = null;
 
-        kakao.maps.load(function() {
+        if (!window.kakao || !window.kakao.maps) {
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'MAP_ERROR',
+            message: 'Kakao SDK unavailable for the configured JavaScript domain'
+          }));
+        } else kakao.maps.load(function() {
           var mapContainer = document.getElementById('map');
           var mapOption = {
               center: new kakao.maps.LatLng(${initialCenter?.lat || 37.5665}, ${initialCenter?.lng || 126.9780}),
@@ -247,8 +260,14 @@ export default function KakaoMapWebView({ center, animateTick, markers, userLoca
                     
                     var content = document.createElement('div');
                     content.style.cssText = 'background: white; border: 2px solid #75BA57; border-radius: 12px; padding: 6px 12px; font-weight: 900; color: #1E293B; font-size: 13px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); cursor: pointer; display: flex; flex-direction: row; align-items: center; justify-content: center; gap: 4px;';
-                    content.innerHTML = '<span style="color: #64748B; font-size: 13px;">' + g.district + '</span>' + 
-                                       '<span style="color: #75BA57; font-size: 16px;">' + g.count + '</span>';
+                    var districtLabel = document.createElement('span');
+                    districtLabel.style.cssText = 'color: #64748B; font-size: 13px;';
+                    districtLabel.textContent = String(g.district || '');
+                    var countLabel = document.createElement('span');
+                    countLabel.style.cssText = 'color: #75BA57; font-size: 16px;';
+                    countLabel.textContent = String(g.count || 0);
+                    content.appendChild(districtLabel);
+                    content.appendChild(countLabel);
                     
                     content.onclick = function() {
                         map.setLevel(5, { anchor: pos, animate: true });
@@ -313,7 +332,7 @@ export default function KakaoMapWebView({ center, animateTick, markers, userLoca
             if (selectedId && selectedMarker) {
                 var labelDiv = document.createElement('div');
                 labelDiv.className = 'pin-label';
-                labelDiv.innerHTML = (selectedMarker.daycareName || selectedMarker.title || '상세보기');
+                labelDiv.textContent = (selectedMarker.daycareName || selectedMarker.title || '상세보기');
                 var labelOverlay = new kakao.maps.CustomOverlay({
                     position: selectedMarker.getPosition(), 
                     content: labelDiv, 
@@ -340,13 +359,14 @@ export default function KakaoMapWebView({ center, animateTick, markers, userLoca
         window.updateMarkers = function(daycareList) {
             var newActiveMarkers = [];
             
-            activeMarkers.forEach(function(m) { m.setMap(null); });
             clusterer.clear();
             districtOverlays.forEach(function(o) { o.setMap(null); });
             districtOverlays = [];
 
+            var nextIds = {};
             daycareList.forEach(function(dc) {
                 var id = String(dc.id);
+                nextIds[id] = true;
                 var latlng = new kakao.maps.LatLng(dc.lat, dc.lng);
                 var color = dc.color || '#3B82F6';
                 var isRecommended = !!dc.isRecommended;
@@ -423,6 +443,10 @@ export default function KakaoMapWebView({ center, animateTick, markers, userLoca
                 newActiveMarkers.push(cached.marker);
             });
 
+            activeMarkers.forEach(function(marker) {
+                if (!nextIds[String(marker.daycareId)]) marker.setMap(null);
+            });
+
             activeMarkers = newActiveMarkers;
             window.updateClusteringMode(); 
             
@@ -440,7 +464,7 @@ export default function KakaoMapWebView({ center, animateTick, markers, userLoca
             var sw = bounds.getSouthWest();
             var ne = bounds.getNorthEast();
             window.ReactNativeWebView.postMessage(JSON.stringify({ 
-              type: 'REGION_CHANGE', latitude: latlng.getLat(), longitude: latlng.getLng(),
+              type: 'REGION_CHANGE', latitude: latlng.getLat(), longitude: latlng.getLng(), level: map.getLevel(),
               bounds: { sw: { lat: sw.getLat(), lng: sw.getLng() }, ne: { lat: ne.getLat(), lng: ne.getLng() } }
             }));
         });
@@ -457,7 +481,7 @@ export default function KakaoMapWebView({ center, animateTick, markers, userLoca
             var sw = bounds.getSouthWest();
             var ne = bounds.getNorthEast();
             window.ReactNativeWebView.postMessage(JSON.stringify({ 
-              type: 'REGION_CHANGE', latitude: latlng.getLat(), longitude: latlng.getLng(),
+              type: 'REGION_CHANGE', latitude: latlng.getLat(), longitude: latlng.getLng(), level: map.getLevel(),
               bounds: { sw: { lat: sw.getLat(), lng: sw.getLng() }, ne: { lat: ne.getLat(), lng: ne.getLng() } }
             }));
         }, 100);
@@ -465,16 +489,19 @@ export default function KakaoMapWebView({ center, animateTick, markers, userLoca
           </script>
     </body>
     </html>
-  `, []);
+  `, [initialCenter?.lat, initialCenter?.lng]);
 
   const handleMessage = useCallback((event) => {
     try {
       const data = JSON.parse(event.nativeEvent.data);
       if (data.type === 'READY') {
         setIsMapReady(true);
+        setMapError(null);
+      } else if (data.type === 'MAP_ERROR') {
+        setMapError(data.message || '지도 SDK를 불러오지 못했습니다.');
       } else if (data.type === 'REGION_CHANGE') {
         if (onRegionChange) {
-          onRegionChange({ latitude: data.latitude, longitude: data.longitude, bounds: data.bounds });
+          onRegionChange({ latitude: data.latitude, longitude: data.longitude, bounds: data.bounds, level: data.level });
         }
       } else if (data.type === 'MARKER_PRESS') {
         if (onMarkerPress) onMarkerPress(data.daycareId);
@@ -488,20 +515,37 @@ export default function KakaoMapWebView({ center, animateTick, markers, userLoca
     }
   }, [onRegionChange, onMarkerPress, onClusterClick, onMapPress]);
 
+  if (!KAKAO_JS_KEY) {
+    return (
+      <View style={[styles.container, styles.fallback]}>
+        <Text style={styles.fallbackText}>지도 API 설정이 필요합니다.</Text>
+      </View>
+    );
+  }
+
+  if (mapError) {
+    return (
+      <View style={[styles.container, styles.fallback]}>
+        <Text style={styles.fallbackText}>지도를 불러오지 못했습니다. 네트워크와 카카오 도메인 설정을 확인해 주세요.</Text>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <WebView
         ref={webviewRef}
-        source={{ html, baseUrl: 'http://localhost' }}
+        source={{ html, baseUrl: 'https://roject-946a273f-869e-48da-a0e.web.app' }}
         style={styles.webview}
         onMessage={handleMessage}
         scrollEnabled={false}
         javaScriptEnabled={true}
         domStorageEnabled={true}
         mixedContentMode="always"
-        allowFileAccess={true}
-        allowUniversalAccessFromFileURLs={true}
-        originWhitelist={['*']}
+        allowFileAccess={false}
+        allowUniversalAccessFromFileURLs={false}
+        originWhitelist={['about:blank', 'https://roject-946a273f-869e-48da-a0e.web.app', 'https://*.kakao.com', 'https://*.kakaocdn.net', 'https://*.daumcdn.net']}
+        onError={(event) => setMapError(event.nativeEvent.description || 'WebView load failed')}
         cacheEnabled={true}
         renderToHardwareTextureAndroid={true}
       />
@@ -511,5 +555,7 @@ export default function KakaoMapWebView({ center, animateTick, markers, userLoca
 
 const styles = StyleSheet.create({
   container: { flex: 1, width: '100%', backgroundColor: '#E2E8F0' },
-  webview: { flex: 1, backgroundColor: 'transparent' }
+  webview: { flex: 1, backgroundColor: 'transparent' },
+  fallback: { alignItems: 'center', justifyContent: 'center' },
+  fallbackText: { color: '#64748B', fontSize: 13 }
 });
