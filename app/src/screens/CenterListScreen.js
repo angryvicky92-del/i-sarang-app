@@ -64,7 +64,6 @@ export default function CenterListScreen({ navigation, route }) {
           <ChevronRight size={20} color={colors.textMuted} />
         </View>
       </TouchableOpacity>
-      {(index + 1) % 5 === 0 && <AdBanner style={{ marginBottom: 16 }} />}
     </>
   ), [colors, isDarkMode, navigation]);
 

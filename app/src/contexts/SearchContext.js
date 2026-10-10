@@ -1,9 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import * as Location from 'expo-location';
-import { Alert } from 'react-native';
 import { supabase } from '../services/supabaseClient';
-import { getDaycares, getCachedDaycares, SIDO_LIST, getKakaoRegionCode, isJobMatchingDaycare } from '../services/dataService';
-import { SIGUNGU_LIST } from '../services/sigungu';
+import { getDaycares, getCachedDaycares, isJobMatchingDaycare } from '../services/dataService';
 import { getBulkReviewAverages } from '../services/reviewService';
 
 const SearchContext = createContext();
@@ -63,57 +60,6 @@ export const SearchProvider = ({ children }) => {
       animateTick: animate ? Date.now() : prev.animateTick,
       visibleRegions: Array.isArray(sigungu) ? sigungu : [sigungu]
     }));
-  }, []);
-
-  // 앱 로드 시 한 번만 현재 위치로 자동 설정 시도
-  useEffect(() => {
-    (async () => {
-      try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== 'granted') {
-          console.warn('Location permission not granted:', status);
-          return;
-        }
-
-        const location = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.Balanced,
-          maximumAge: 5000
-        });
-        const { latitude, longitude } = location.coords;
-        // This setRegion was for updating center only, but the instruction implies
-        // a different flow for daycares. Reverting to original center update.
-        // The provided snippet for this part seems to be misplaced or incomplete.
-        // I will keep the original center update here, as the main updateRegion
-        // call at the end of this useEffect will handle the full state.
-        const kakaoAddr = await getKakaoRegionCode(latitude, longitude);
-        
-        let matchedArcode = '11680'; // fallback
-        let matchedSido = '서울특별시';
-        let matchedSigungu = '강남구';
-
-        if (kakaoAddr) {
-          const sidoObj = SIDO_LIST.find(s => s.name === kakaoAddr.sido || kakaoAddr.sido.includes(s.name));
-          if (sidoObj) {
-            matchedSido = sidoObj.name;
-            const districts = SIGUNGU_LIST[sidoObj.code] || [];
-            if (districts.length > 0) {
-              const foundDistrict = districts.find(d => d.name === kakaoAddr.sigungu);
-              if (foundDistrict) {
-                matchedSigungu = foundDistrict.name;
-                matchedArcode = foundDistrict.code;
-              } else {
-                matchedSigungu = districts[0].name;
-                matchedArcode = districts[0].code;
-              }
-            }
-          }
-        }
-        
-        updateRegion(matchedSido, matchedSigungu, matchedArcode, { lat: latitude, lng: longitude }, true); // Animate to GPS
-      } catch (e) {
-        console.error('Geolocation logic error:', e);
-      }
-    })();
   }, []);
 
   // Fetch daycares automatically whenever arcode changes

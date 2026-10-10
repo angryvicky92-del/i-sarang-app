@@ -7,12 +7,8 @@ import { useTheme } from '../contexts/ThemeContext';
 
 /**
  * 추천/비추천 버튼 컴포넌트
- * @param {string} targetType - 'post', 'comment', 'review'
- * @param {string|number} targetId - 콘텐츠 ID
- * @param {object} item - 콘텐츠 데이터 (upvotes, downvotes 포함)
- * @param {number} userVote - 사용자의 현재 투표 상태 (1, -1, 0)
- * @param {string} userId - 사용자 ID
- * @param {function} onUpdate - 투표 후 업데이트 콜백
+ * @param {{targetType: string, targetId: string|number, item: object, userVote: number,
+ * userId?: string, onUpdate?: function}} props
  */
 export default function EngagementButtons({ targetType, targetId, item, userVote, userId, onUpdate }) {
   const [loading, setLoading] = useState(false);

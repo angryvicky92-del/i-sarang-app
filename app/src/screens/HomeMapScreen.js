@@ -364,7 +364,7 @@ export default function HomeMapScreen({ navigation, route }) {
         onMarkerPress={(id) => {
           lastProgrammaticMove.current = Date.now();
           if (mapMode === 'DAYCARE') {
-            const dc = filteredMapDaycares.find(d => d.id === id);
+            const dc = daycareLookupMap.get(String(id));
             if (dc) setSelectedDaycare(dc);
           } else {
             const rp = mapPlaces.find(p => p.id === id);

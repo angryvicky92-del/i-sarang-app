@@ -69,7 +69,7 @@ export default function KakaoRoadview({ lat, lng }) {
         bounces={false}
         javaScriptEnabled={true}
         domStorageEnabled={true}
-        mixedContentMode="always"
+        mixedContentMode="never"
         allowFileAccess={false}
         allowUniversalAccessFromFileURLs={false}
         pointerEvents="auto"

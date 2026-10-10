@@ -59,9 +59,9 @@ export default function AdminApprovalScreen({ navigation }) {
       </View>
 
       <View style={[styles.imageWrapper, { backgroundColor: colors.background, borderColor: colors.border }]}>
-        {item.verification_image ? (
+        {item.verification_image_url ? (
           <Image 
-            source={{ uri: item.verification_image }} 
+            source={{ uri: item.verification_image_url }}
             style={styles.verificationImage} 
             resizeMode="contain"
           />

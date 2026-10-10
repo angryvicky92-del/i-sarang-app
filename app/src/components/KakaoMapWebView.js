@@ -541,7 +541,7 @@ export default function KakaoMapWebView({ center, animateTick, markers, userLoca
         scrollEnabled={false}
         javaScriptEnabled={true}
         domStorageEnabled={true}
-        mixedContentMode="always"
+        mixedContentMode="never"
         allowFileAccess={false}
         allowUniversalAccessFromFileURLs={false}
         originWhitelist={['about:blank', 'https://roject-946a273f-869e-48da-a0e.web.app', 'https://*.kakao.com', 'https://*.kakaocdn.net', 'https://*.daumcdn.net']}

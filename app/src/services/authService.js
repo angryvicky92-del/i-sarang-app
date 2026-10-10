@@ -139,22 +139,44 @@ export const getPendingVerifications = async () => {
     .select('*')
     .eq('verification_status', 'pending')
     .eq('user_type', '선생님');
-  return { data, error };
+  if (error || !data) return { data, error };
+  const signed = await Promise.all(data.map(async (profile) => {
+    if (!profile.verification_image) return profile;
+    const { data: signedData, error: signedError } = await supabase.storage
+      .from('certificates')
+      .createSignedUrl(profile.verification_image, 300);
+    return { ...profile, verification_image_url: signedError ? null : signedData?.signedUrl };
+  }));
+  return { data: signed, error: null };
 };
 
 export const processVerification = async (userId, status) => {
   // status: 'approved' or 'rejected'
   const isVerified = status === 'approved';
+  const { data: current } = await supabase
+    .from('profiles')
+    .select('verification_image')
+    .eq('id', userId)
+    .single();
   const { data, error } = await supabase
     .from('profiles')
     .update({
       verification_status: status,
       is_verified: isVerified,
+      verification_image: null,
       updated_at: new Date().toISOString()
     })
     .eq('id', userId)
     .select();
 
+  if (!error && current?.verification_image) {
+    await supabase.storage.from('certificates').remove([current.verification_image]);
+  }
+  return { data, error };
+};
+
+export const deleteAccount = async () => {
+  const { data, error } = await supabase.functions.invoke('delete-account', { method: 'POST' });
   return { data, error };
 };
 
