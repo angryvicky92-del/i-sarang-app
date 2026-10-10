@@ -10,8 +10,8 @@ export const getHomeData = async (userType) => {
   };
 
   try {
-    // 1. Fetch Reviews (Resilient)
-    try {
+    const reviewsTask = (async () => {
+      try {
       const { data: rawReviews, error: reviewError } = await supabase
         .from('reviews')
         .select('*')
@@ -39,10 +39,11 @@ export const getHomeData = async (userType) => {
         }
         result.recentReviews = filteredReviews.slice(0, 6);
       }
-    } catch (e) { console.warn('Review fetch failed', e); }
+      } catch (e) { console.warn('Review fetch failed', e); }
+    })();
 
-    // 1.2 Fetch Recommended Places
-    try {
+    const recommendationsTask = (async () => {
+      try {
       const { data: recReviews } = await supabase
         .from('reviews')
         .select('center_id, center_name, center_addr, center_type, rating')
@@ -59,10 +60,11 @@ export const getHomeData = async (userType) => {
         }
       });
       result.recommendedPlaces = uniquePlaces.slice(0, 5);
-    } catch (e) { console.warn('Recommended places fetch failed', e); }
+      } catch (e) { console.warn('Recommended places fetch failed', e); }
+    })();
 
-    // 2. Fetch Popular Posts (Dynamic Backfilling)
-    try {
+    const postsTask = (async () => {
+      try {
       let postQuery = supabase
         .from('posts')
         .select('*, post_comments(count)');
@@ -113,15 +115,15 @@ export const getHomeData = async (userType) => {
           result.popularPosts = [...result.popularPosts, ...fallbackPosts];
         }
       }
-    } catch (e) { 
-      console.warn('Post fetch failed', e);
-      // Last resort fallback
-      const { data: lastResort } = await supabase.from('posts').select('*').order('created_at', { ascending: false }).limit(5);
-      if (lastResort) result.popularPosts = lastResort;
-    }
+      } catch (e) {
+        console.warn('Post fetch failed', e);
+        const { data: lastResort } = await supabase.from('posts').select('*').order('created_at', { ascending: false }).limit(5);
+        if (lastResort) result.popularPosts = lastResort;
+      }
+    })();
 
-    // 3. Fetch Jobs
-    try {
+    const jobsTask = (async () => {
+      try {
       const kstOffset = 9 * 60 * 60 * 1000;
       const todayStr = new Date(Date.now() + kstOffset).toISOString().split('T')[0];
       
@@ -133,19 +135,25 @@ export const getHomeData = async (userType) => {
         .limit(5);
       
       if (!jobError && jobs) result.recentJobs = jobs;
-    } catch (e) { console.warn('Job fetch failed', e); }
+      } catch (e) { console.warn('Job fetch failed', e); }
+    })();
 
-    // 4. Fetch Stats
-    try {
-      const { count: reviewCount } = await supabase.from('reviews').select('*', { count: 'exact', head: true });
-      const { count: userCount } = await supabase.from('profiles').select('*', { count: 'exact', head: true });
-      const { count: postCount } = await supabase.from('posts').select('*', { count: 'exact', head: true });
-      result.stats = { 
-        reviewCount: reviewCount || 0, 
-        userCount: (userCount || 0) + 1240, 
-        postCount: postCount || 0 
-      };
-    } catch (e) { console.warn('Stats fetch failed', e); }
+    const statsTask = (async () => {
+      try {
+        const [reviewsResult, usersResult, postsResult] = await Promise.all([
+          supabase.from('reviews').select('id', { count: 'exact', head: true }),
+          supabase.from('profiles').select('id', { count: 'exact', head: true }),
+          supabase.from('posts').select('id', { count: 'exact', head: true })
+        ]);
+        result.stats = {
+          reviewCount: reviewsResult.count || 0,
+          userCount: (usersResult.count || 0) + 1240,
+          postCount: postsResult.count || 0
+        };
+      } catch (e) { console.warn('Stats fetch failed', e); }
+    })();
+
+    await Promise.all([reviewsTask, recommendationsTask, postsTask, jobsTask, statsTask]);
 
     return result;
   } catch (error) {

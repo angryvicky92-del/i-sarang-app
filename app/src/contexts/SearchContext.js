@@ -1,9 +1,6 @@
-import React, { createContext, useContext, useState, useEffect, useMemo, useRef } from 'react';
-import * as Location from 'expo-location';
-import { Alert } from 'react-native';
+import React, { createContext, useContext, useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { supabase } from '../services/supabaseClient';
-import { getDaycares, getCachedDaycares, SIDO_LIST, getKakaoRegionCode, isJobMatchingDaycare } from '../services/dataService';
-import { SIGUNGU_LIST } from '../services/sigungu';
+import { getDaycares, getCachedDaycares, isJobMatchingDaycare } from '../services/dataService';
 import { getBulkReviewAverages } from '../services/reviewService';
 
 const SearchContext = createContext();
@@ -28,14 +25,14 @@ export const SearchProvider = ({ children }) => {
     visibleRegions: [] // Array of sigungu names seen in viewport
   });
   
-  // Cumulative caches for Map pins
+  // Pins represent the current viewport only; API-level caches live in services.
   const [mapDaycares, setMapDaycares] = useState([]);
   const [mapPlaces, setMapPlaces] = useState([]);
 
   // Global cache for daycare ratings: { [stcode]: { parentAvg, teacherAvg } }
   const [daycareRatings, setDaycareRatings] = useState({});
 
-  const updateDaycareRating = (stcode, ratings) => {
+  const updateDaycareRating = useCallback((stcode, ratings) => {
     if (!stcode) return;
     
     setDaycareRatings(prev => {
@@ -48,9 +45,9 @@ export const SearchProvider = ({ children }) => {
         [stcode]: ratings
       };
     });
-  };
+  }, []);
 
-  const updateRegion = (sido, sigungu, arcode, center, animate = false, manualDaycares = null) => {
+  const updateRegion = useCallback((sido, sigungu, arcode, center, animate = false, manualDaycares = null) => {
     setRegion(prev => ({
       ...prev,
       sido: sido,
@@ -63,62 +60,13 @@ export const SearchProvider = ({ children }) => {
       animateTick: animate ? Date.now() : prev.animateTick,
       visibleRegions: Array.isArray(sigungu) ? sigungu : [sigungu]
     }));
-  };
-
-  // 앱 로드 시 한 번만 현재 위치로 자동 설정 시도
-  useEffect(() => {
-    (async () => {
-      try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== 'granted') {
-          console.warn('Location permission not granted:', status);
-          return;
-        }
-
-        const location = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.Balanced,
-          maximumAge: 5000
-        });
-        const { latitude, longitude } = location.coords;
-        // This setRegion was for updating center only, but the instruction implies
-        // a different flow for daycares. Reverting to original center update.
-        // The provided snippet for this part seems to be misplaced or incomplete.
-        // I will keep the original center update here, as the main updateRegion
-        // call at the end of this useEffect will handle the full state.
-        const kakaoAddr = await getKakaoRegionCode(latitude, longitude);
-        
-        let matchedArcode = '11680'; // fallback
-        let matchedSido = '서울특별시';
-        let matchedSigungu = '강남구';
-
-        if (kakaoAddr) {
-          const sidoObj = SIDO_LIST.find(s => s.name === kakaoAddr.sido || kakaoAddr.sido.includes(s.name));
-          if (sidoObj) {
-            matchedSido = sidoObj.name;
-            const districts = SIGUNGU_LIST[sidoObj.code] || [];
-            if (districts.length > 0) {
-              const foundDistrict = districts.find(d => d.name === kakaoAddr.sigungu);
-              if (foundDistrict) {
-                matchedSigungu = foundDistrict.name;
-                matchedArcode = foundDistrict.code;
-              } else {
-                matchedSigungu = districts[0].name;
-                matchedArcode = districts[0].code;
-              }
-            }
-          }
-        }
-        
-        updateRegion(matchedSido, matchedSigungu, matchedArcode, { lat: latitude, lng: longitude }, true); // Animate to GPS
-      } catch (e) {
-        console.error('Geolocation logic error:', e);
-      }
-    })();
   }, []);
 
   // Fetch daycares automatically whenever arcode changes
   useEffect(() => {
     if (!region.arcode || region.isManual) return;
+    const requestedArcode = region.arcode;
+    let cancelled = false;
     
     // 1. Check synchronous cache first for instant UI response
     const cachedData = getCachedDaycares(region.arcode);
@@ -129,31 +77,41 @@ export const SearchProvider = ({ children }) => {
 
     // 2. If not in cache, fetch async with loader
     setRegion(prev => ({ ...prev, isLoading: true }));
-    getDaycares(region.arcode).then(data => {
-      setRegion(prev => ({ ...prev, daycares: data, isLoading: false }));
+    getDaycares(requestedArcode).then(data => {
+      if (cancelled) return;
+      setRegion(prev => prev.arcode === requestedArcode
+        ? { ...prev, daycares: data, isLoading: false }
+        : prev);
       
-      // Merge into cumulative map cache
-      if (data && data.length > 0) {
-        setMapDaycares(prev => {
-          const existingIds = new Set(prev.map(dc => dc.stcode));
-          const newItems = data.filter(dc => !existingIds.has(dc.stcode));
-          return [...prev, ...newItems];
-        });
-      }
+      setMapDaycares(Array.isArray(data) ? data : []);
     });
+
+    return () => {
+      cancelled = true;
+    };
   }, [region.arcode, region.isManual]);
 
-  // Sync region.daycares to cumulative mapDaycares whenever it updates
+  // Keep map pins aligned with the latest resolved viewport.
   useEffect(() => {
-    if (region.daycares && region.daycares.length > 0) {
-      setMapDaycares(prev => {
-        const existingIds = new Set(prev.map(dc => dc.stcode));
-        const newItems = region.daycares.filter(dc => !existingIds.has(dc.stcode));
-        if (newItems.length === 0) return prev;
-        return [...prev, ...newItems];
-      });
-    }
+    setMapDaycares(Array.isArray(region.daycares) ? region.daycares : []);
   }, [region.daycares]);
+
+  const replaceMapPlaces = useCallback((data) => {
+    const incoming = Array.isArray(data) ? data : (data ? [data] : []);
+    const normalize = (name) => name ? name.replace(/\s/g, '').replace(/\(.*\)/g, '') : '';
+    const seenIds = new Set();
+    const seenHashes = new Set();
+    const uniqueItems = incoming.filter(item => {
+      if (!item || !Number.isFinite(Number(item.lat)) || !Number.isFinite(Number(item.lng))) return false;
+      const id = String(item.id || item.contentid || '');
+      const hash = `${normalize(item.title || item.name)}_${Number(item.lat).toFixed(4)}_${Number(item.lng).toFixed(4)}`;
+      if ((id && seenIds.has(id)) || seenHashes.has(hash)) return false;
+      if (id) seenIds.add(id);
+      seenHashes.add(hash);
+      return true;
+    });
+    setMapPlaces(uniqueItems);
+  }, []);
   
   const lastFetchedIds = useRef(new Set());
   useEffect(() => {
@@ -186,7 +144,17 @@ export const SearchProvider = ({ children }) => {
   const [jobCounts, setJobCounts] = useState({});
 
   const hasFetchedJobs = useRef(false);
-  const jobIndex = useRef(new Map());
+  const jobIndex = useMemo(() => {
+    const index = new Map();
+    const normalize = (name) => name ? name.replace(/\s/g, '').replace(/\(.*\)/g, '') : '';
+    allJobs.forEach(job => {
+      const norm = normalize(job.center_name);
+      if (!norm) return;
+      if (!index.has(norm)) index.set(norm, []);
+      index.get(norm).push(job);
+    });
+    return index;
+  }, [allJobs]);
 
   // Fetch job counts with minimal data for strict matching
   const fetchJobCounts = async () => {
@@ -196,29 +164,24 @@ export const SearchProvider = ({ children }) => {
       // Select ONLY required fields for matching and counting to reduce payload size
       const { data } = await supabase
         .from('job_offers')
-        .select('id, title, position, deadline, center_name, location, metadata');
+        .select('id, title, position, deadline, center_name, location, metadata')
+        .gte('deadline', new Date().toISOString().slice(0, 10));
       
       if (data) {
         setAllJobs(data);
         hasFetchedJobs.current = true;
         
         const counts = {};
-        const index = new Map();
         const normalize = (name) => name ? name.replace(/\s/g, '').replace(/\(.*\)/g, '') : '';
         
         data.forEach(job => {
           const norm = normalize(job.center_name);
           if (norm) {
             counts[norm] = (counts[norm] || 0) + 1;
-            if (!index.has(norm)) index.set(norm, []);
-            index.get(norm).push(job);
           }
         });
         
-        jobIndex.current = index;
         setJobCounts(counts);
-        setAllJobs(data);
-        hasFetchedJobs.current = true;
       }
     } catch (e) {
       console.warn('Job fetch fail', e);
@@ -233,7 +196,7 @@ export const SearchProvider = ({ children }) => {
     return () => clearTimeout(timer);
   }, []); // Only once on mount
 
-  const resetFilters = () => {
+  const resetFilters = useCallback(() => {
     setFilters({
       minRating: 0,
       minTeacherRating: 0,
@@ -244,11 +207,11 @@ export const SearchProvider = ({ children }) => {
       admissionAge: null,
       nameQuery: ''
     });
-  };
+  }, []);
 
   const [favorites, setFavorites] = useState([]); // Array of daycare objects or IDs
   
-  const fetchFavorites = async () => {
+  const fetchFavorites = useCallback(async () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
@@ -262,14 +225,14 @@ export const SearchProvider = ({ children }) => {
     } catch (e) {
       console.warn('Fetch favorites fail', e);
     }
-  };
+  }, []);
 
   // Load favorites on mount or auth change
   useEffect(() => {
     fetchFavorites();
-  }, [region.arcode]); // Also refresh on region change maybe? Or just once.
+  }, [fetchFavorites]);
 
-  const toggleFavorite = async (item, navigation) => {
+  const toggleFavorite = useCallback(async (item, navigation) => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
@@ -334,9 +297,9 @@ export const SearchProvider = ({ children }) => {
     } catch (e) {
       console.warn('Toggle favorite fail', e);
     }
-  };
+  }, [favorites]);
 
-  const isFavorited = (id) => favorites.some(f => f.daycare_id === id);
+  const isFavorited = useCallback((id) => favorites.some(f => f.daycare_id === id), [favorites]);
 
   // Centralized filter function for better performance
   const applyFilters = (list, filters, jobIndexMap, ratings) => {
@@ -421,67 +384,41 @@ export const SearchProvider = ({ children }) => {
   };
 
   const filteredDaycares = useMemo(() => 
-    applyFilters(region.daycares, filters, jobIndex.current, daycareRatings), 
-    [region.daycares, filters, allJobs, daycareRatings]
+    applyFilters(region.daycares, filters, jobIndex, daycareRatings),
+    [region.daycares, filters, jobIndex, daycareRatings]
   );
 
   const filteredMapDaycares = useMemo(() => 
-    applyFilters(mapDaycares, filters, jobIndex.current, daycareRatings), 
-    [mapDaycares, filters, allJobs, daycareRatings]
+    applyFilters(mapDaycares, filters, jobIndex, daycareRatings),
+    [mapDaycares, filters, jobIndex, daycareRatings]
   );
 
+  const contextValue = useMemo(() => ({
+    region,
+    updateRegion,
+    filters,
+    setFilters,
+    resetFilters,
+    filteredDaycares,
+    allJobs,
+    jobCounts,
+    favorites,
+    toggleFavorite,
+    isFavorited,
+    daycareRatings,
+    updateDaycareRating,
+    mapDaycares,
+    mapPlaces,
+    setMapPlaces: replaceMapPlaces,
+    filteredMapDaycares
+  }), [
+    region, updateRegion, filters, resetFilters, filteredDaycares, allJobs, jobCounts,
+    favorites, toggleFavorite, isFavorited, daycareRatings, updateDaycareRating,
+    mapDaycares, mapPlaces, replaceMapPlaces, filteredMapDaycares
+  ]);
+
   return (
-    <SearchContext.Provider value={{ 
-      region, 
-      updateRegion, 
-      filters, 
-      setFilters, 
-      resetFilters, 
-      filteredDaycares,
-      allJobs,
-      jobCounts,
-      favorites,
-      toggleFavorite,
-      isFavorited,
-      daycareRatings,
-      updateDaycareRating,
-      mapDaycares,
-      mapPlaces,
-      setMapPlaces: (data) => {
-        if (!data) return;
-        setMapPlaces(prev => {
-          const normalize = (n) => n ? n.replace(/\s/g, '').replace(/\(.*\)/g, '') : '';
-          
-          // 1. Combine previous and incoming data
-          const incoming = Array.isArray(data) ? data : [data];
-          const allItems = [...prev, ...incoming];
-          
-          // 2. Perform global deduplication (ID and Location Hash)
-          const uniqueItems = [];
-          const seenIds = new Set();
-          const seenHashes = new Set();
-          
-          allItems.forEach(item => {
-            if (!item) return;
-            const id = String(item.id || item.contentid || '');
-            const hash = `${normalize(item.title || item.name)}_${Number(item.lat || 0).toFixed(3)}_${Number(item.lng || 0).toFixed(3)}`;
-            
-            // Check if either ID or exact Location+Name combo was already processed
-            if (id && seenIds.has(id)) return;
-            if (hash && seenHashes.has(hash)) return;
-            
-            if (id) seenIds.add(id);
-            if (hash) seenHashes.add(hash);
-            uniqueItems.push(item);
-          });
-          
-          // Only update if the length changed or content is fresh
-          if (uniqueItems.length === prev.length && prev.length > 0) return prev;
-          return uniqueItems;
-        });
-      },
-      filteredMapDaycares
-    }}>
+    <SearchContext.Provider value={contextValue}>
       {children}
     </SearchContext.Provider>
   );

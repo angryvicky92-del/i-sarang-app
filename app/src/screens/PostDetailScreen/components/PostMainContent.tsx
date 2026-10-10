@@ -1,6 +1,5 @@
 import React from 'react';
 import { View, Text, Image, TouchableOpacity, StyleSheet } from 'react-native';
-import { WebView } from 'react-native-webview';
 import { Eye } from 'lucide-react-native';
 import EngagementButtons from '@/components/EngagementButtons';
 import { HorizontalBox, VerticalBox } from '@/design/layout/Box';
@@ -15,6 +14,18 @@ interface PostMainContentProps {
   colors: any;
 }
 
+const toPlainText = (html: unknown) => String(html || '')
+  .replace(/<br\s*\/?>/gi, '\n')
+  .replace(/<\/p>/gi, '\n\n')
+  .replace(/<[^>]*>/g, '')
+  .replace(/&nbsp;/gi, ' ')
+  .replace(/&amp;/gi, '&')
+  .replace(/&lt;/gi, '<')
+  .replace(/&gt;/gi, '>')
+  .replace(/&quot;/gi, '"')
+  .replace(/&#39;/gi, "'")
+  .trim();
+
 export const PostMainContent: React.FC<PostMainContentProps> = ({ 
   post, 
   imageAspectRatios, 
@@ -24,43 +35,6 @@ export const PostMainContent: React.FC<PostMainContentProps> = ({
   userId, 
   colors 
 }) => {
-  const [webViewHeight, setWebViewHeight] = React.useState(200);
-
-  const htmlTemplate = `
-    <!DOCTYPE html>
-    <html>
-      <head>
-        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-        <style>
-          body {
-            font-family: -apple-system, system-ui, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            font-size: 16px;
-            line-height: 1.6;
-            color: ${colors.textSecondary};
-            padding: 0;
-            margin: 0;
-            background-color: transparent;
-          }
-          p { margin: 0 0 16px 0; }
-          b, strong { font-weight: 800; color: ${colors.text}; }
-          img { max-width: 100%; height: auto; border-radius: 12px; margin: 12px 0; }
-        </style>
-      </head>
-      <body>
-        <div id="content">${post.content}</div>
-        <script>
-          function sendHeight() {
-            window.ReactNativeWebView.postMessage(document.getElementById('content').scrollHeight);
-          }
-          window.onload = sendHeight;
-          // Recalculate if content changes (e.g. images load)
-          const observer = new ResizeObserver(sendHeight);
-          observer.observe(document.getElementById('content'));
-        </script>
-      </body>
-    </html>
-  `;
-
   return (
     <VerticalBox paddingHorizontal={20} style={{ paddingTop: 20 }}>
       <VerticalBox>
@@ -108,18 +82,9 @@ export const PostMainContent: React.FC<PostMainContentProps> = ({
           />
         ))}
 
-        <View style={{ height: webViewHeight, marginBottom: 40 }}>
-          <WebView
-            originWhitelist={['*']}
-            source={{ html: htmlTemplate }}
-            scrollEnabled={false}
-            onMessage={(event) => {
-              const height = parseInt(event.nativeEvent.data);
-              if (height > 0) setWebViewHeight(height + 20);
-            }}
-            style={{ backgroundColor: 'transparent' }}
-          />
-        </View>
+        <Text style={[styles.postBody, { color: colors.textSecondary }]}>
+          {toPlainText(post.content)}
+        </Text>
       </VerticalBox>
       
       <HorizontalBox 
@@ -140,6 +105,7 @@ export const PostMainContent: React.FC<PostMainContentProps> = ({
 };
 
 const styles = StyleSheet.create({
+  postBody: { fontSize: 16, lineHeight: 26, marginBottom: 40 },
   metaInfo: { marginBottom: 20 },
   adminChip: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
   typeChip: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },

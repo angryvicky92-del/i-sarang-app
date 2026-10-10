@@ -31,14 +31,13 @@ serve(async (req) => {
         return new Response(JSON.stringify({ message: "Self-comment, no push" }), { status: 200 });
       }
 
-      // 2. Get author's push token
-      const { data: author, error: authorError } = await supabase
-        .from('profiles')
-        .select('push_token, notification_settings')
-        .eq('id', post.user_id)
-        .single();
+      // 2. Get every registered device for the author.
+      const { data: devices, error: deviceError } = await supabase
+        .from('push_devices')
+        .select('expo_push_token')
+        .eq('user_id', post.user_id);
 
-      if (authorError || !author?.push_token) {
+      if (deviceError || !devices?.length) {
           return new Response(JSON.stringify({ message: "No push token found for author" }), { status: 200 });
       }
 
@@ -46,13 +45,13 @@ serve(async (req) => {
       // For now, let's just send it if they have a token.
 
       // 4. Send the push
-      const message = {
-        to: author.push_token,
+      const message = devices.map(({ expo_push_token }) => ({
+        to: expo_push_token,
         sound: 'default',
         title: '내 게시글에 새로운 댓글이 달렸습니다.',
         body: commentContent,
         data: { post_id: post_id, type: 'comment' },
-      };
+      }));
 
       const res = await fetch(EXPO_PUSH_URL, {
         method: "POST",

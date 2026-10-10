@@ -5,7 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { supabase } from '../services/supabaseClient';
 import { ShieldCheck, ChevronRight, BadgeCheck, LogOut, Camera, Bookmark, Edit2, Lock, Save, X, RotateCcw, Check, UserMinus, ChevronLeft, Heart, Settings } from 'lucide-react-native';
-import { updateNickname, updatePassword, generateRandomNickname, checkNicknameDuplicate } from '../services/authService';
+import { updateNickname, updatePassword, generateRandomNickname, checkNicknameDuplicate, deleteAccount } from '../services/authService';
 
 export default function MyPageScreen({ navigation }) {
   const { profile, session, isLoading } = useAuth();
@@ -122,10 +122,7 @@ export default function MyPageScreen({ navigation }) {
           onPress: async () => {
             setUpdating(true);
             try {
-              const { error: deleteError } = await supabase
-                .from('profiles')
-                .delete()
-                .eq('id', session.user.id);
+              const { error: deleteError } = await deleteAccount();
               if (deleteError) throw deleteError;
               await supabase.auth.signOut();
               Alert.alert('탈퇴 완료', '얼집체크 회원 탈퇴가 완료되었습니다.');

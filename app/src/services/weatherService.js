@@ -34,8 +34,8 @@ export const weatherService = {
       const baseTime = String(hours).padStart(2, '0') + '00';
 
       const [weatherRes, pollutionRes] = await Promise.all([
-        fetch(`http://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getUltraSrtFcst?serviceKey=${API_KEY}&numOfRows=60&pageNo=1&base_date=${baseDate}&base_time=${baseTime}&nx=${DEFAULT_LOC.nx}&ny=${DEFAULT_LOC.ny}&dataType=JSON`),
-        fetch(`http://apis.data.go.kr/B552584/ArpltnInforInqireSvc/getMsrstnAcctoRltmMesureDnsty?serviceKey=${API_KEY}&returnType=json&numOfRows=1&pageNo=1&stationName=${encodeURIComponent(DEFAULT_LOC.station)}&dataTerm=DAILY&ver=1.3`)
+        fetch(`https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getUltraSrtFcst?serviceKey=${API_KEY}&numOfRows=60&pageNo=1&base_date=${baseDate}&base_time=${baseTime}&nx=${DEFAULT_LOC.nx}&ny=${DEFAULT_LOC.ny}&dataType=JSON`),
+        fetch(`https://apis.data.go.kr/B552584/ArpltnInforInqireSvc/getMsrstnAcctoRltmMesureDnsty?serviceKey=${API_KEY}&returnType=json&numOfRows=1&pageNo=1&stationName=${encodeURIComponent(DEFAULT_LOC.station)}&dataTerm=DAILY&ver=1.3`)
       ]);
 
       const weatherJSON = await weatherRes.json();

@@ -6,6 +6,7 @@ import { ChevronLeft, ThumbsUp as ThumbsUpIcon, MessageCircle, Send, CheckCircle
 import { motion, AnimatePresence } from 'framer-motion'
 import AdBanner from '../components/AdBanner'
 import LexicalEditor from '../components/LexicalEditor/LexicalEditor'
+import DOMPurify from 'dompurify'
 
 const Toast = ({ message, type, onClose }) => {
   useEffect(() => {
@@ -265,7 +266,7 @@ export default function PostDetail() {
 
             <div 
               className="rich-text-content prose max-w-none text-base leading-relaxed text-slate-700 font-medium min-h-[100px] mb-[30px]"
-              dangerouslySetInnerHTML={{ __html: post.content }} 
+              dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(post.content || '') }}
             />
             
             {post.image_url && (

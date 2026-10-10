@@ -50,9 +50,6 @@ export default function Signup() {
 
   useEffect(() => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-    // admin86은 이메일 형식이 아니어도 통과되도록 특수 허용
-    const isSpecialAdmin = formData.email === 'admin86'
-    
     const hasUpper = /[A-Z]/.test(formData.password)
     const hasLower = /[a-z]/.test(formData.password)
     const hasNumber = /[0-9]/.test(formData.password)
@@ -60,7 +57,7 @@ export default function Signup() {
     const isLongEnough = formData.password.length >= 8
 
     setValidations({
-      email: isSpecialAdmin || emailRegex.test(formData.email),
+      email: emailRegex.test(formData.email),
       passwordLength: isLongEnough,
       passwordCase: hasUpper && hasLower,
       passwordNumber: hasNumber,
@@ -98,14 +95,7 @@ export default function Signup() {
     }
 
     setLoading(true)
-    // admin86 아이디인 경우 내부적으로 이메일 형식으로 변환 및 관리자 유형 강제 지정
-    const signupData = {
-      ...formData,
-      email: formData.email === 'admin86' ? 'admin86@admin.com' : formData.email,
-      userType: formData.email === 'admin86' ? '관리자' : formData.userType
-    }
-    
-    const { error: signupError } = await signUp(signupData)
+    const { error: signupError } = await signUp(formData)
     setLoading(false)
 
     if (signupError) {

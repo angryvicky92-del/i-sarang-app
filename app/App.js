@@ -1,7 +1,8 @@
+/* global require */
 import 'react-native-url-polyfill/auto';
 import React from 'react';
 import Toast from 'react-native-toast-message';
-import { TouchableOpacity, View, Image, Text, Platform, NativeModules } from 'react-native';
+import { TouchableOpacity, View, Image, Text, Platform } from 'react-native';
 import { SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-context';
 import { NavigationContainer, DefaultTheme, DarkTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -18,6 +19,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import * as Notifications from 'expo-notifications';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { registerForPushNotificationsAsync } from './src/services/notificationService';
+import { initializeMobileAds } from './src/services/mobileAds';
 
 import HomeScreen from './src/screens/HomeScreen';
 import HomeMapScreen from './src/screens/HomeMapScreen';
@@ -30,7 +32,17 @@ import { WritePostScreen } from './src/screens/WritePostScreen';
 import AdminApprovalScreen from './src/screens/AdminApprovalScreen';
 import { PostDetailScreen } from './src/screens/PostDetailScreen';
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 2 * 60 * 1000,
+      gcTime: 15 * 60 * 1000,
+      retry: 1,
+      refetchOnReconnect: true,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
 import JobDetailScreen from './src/screens/JobDetailScreen';
 import TeacherCertificationScreen from './src/screens/TeacherCertificationScreen';
 import FavoriteJobsScreen from './src/screens/FavoriteJobsScreen';
@@ -347,24 +359,10 @@ function ThemedNavigation() {
 
 export default function App() {
   React.useEffect(() => {
-    // Robust check for AdMob native module presence
-    const hasNativeAdMob = !!(NativeModules.RNGoogleMobileAdsModule || NativeModules.RNGoogleMobileAdsInternalModule);
-    if (hasNativeAdMob) {
-      // Defer AdMob initialization to avoid blocking initial startup animation
-      const timer = setTimeout(() => {
-        try {
-          // Safe require to prevent crash if module is present but malformed
-          const mobileAdsModule = require('react-native-google-mobile-ads');
-          const mobileAds = mobileAdsModule.default || mobileAdsModule;
-          if (typeof mobileAds === 'function') {
-            mobileAds().initialize().catch(() => {});
-          }
-        } catch (e) {
-          console.warn('AdMob initialization skipped:', e.message);
-        }
-      }, 3000);
-      return () => clearTimeout(timer);
-    }
+    const timer = setTimeout(() => {
+      initializeMobileAds().catch(() => {});
+    }, 3000);
+    return () => clearTimeout(timer);
   }, []);
 
   React.useEffect(() => {
