@@ -42,6 +42,15 @@
           "androidAppId": "ca-app-pub-2170284484198182~1980683779",
           "iosAppId": "ca-app-pub-2170284484198182~2888344837"
         }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "enableMinifyInReleaseBuilds": true,
+            "enableShrinkResourcesInReleaseBuilds": true
+          }
+        }
       ]
     ],
     "extra": {
