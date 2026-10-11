@@ -2,9 +2,9 @@ import React, { useState, useEffect, useMemo, useLayoutEffect, useCallback, useR
 import { View, Text, StyleSheet, ScrollView, Dimensions, TouchableOpacity, ActivityIndicator, Linking, Alert, TextInput, Platform, InteractionManager, PanResponder, Animated as RNAnimated } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 // import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, withSequence, withSpring } from 'react-native-reanimated';
-import { WebView } from 'react-native-webview';
 import { PieChart } from 'react-native-chart-kit';
 import KakaoRoadview from '../components/KakaoRoadview';
+import KakaoMapWebView from '../components/KakaoMapWebView';
 import { SIDO_LIST, TYPE_COLORS, TYPE_GOK, getDaycares, isJobMatchingDaycare } from '../services/dataService';
 import KindergartenLoader from '../components/KindergartenLoader';
 import { Star, MapPin, Building2, Phone, Bus, Package, ChevronDown, ChevronLeft, ChevronRight, Heart, MessageCircle, Info, Calendar, Users, Briefcase } from 'lucide-react-native';
@@ -21,8 +21,6 @@ import UserActionModal from '../components/UserActionModal';
 import { getOrCreateChat } from '../services/chatService';
 
 const screenWidth = Dimensions.get('window').width;
-
-const KAKAO_KEY = process.env.EXPO_PUBLIC_KAKAO_JS_KEY || 'dc33fe7753b02b59868630ccbfd7b820';
 
 const calculateRatio = (children, teachers) => {
   if (!teachers || teachers === 0) return '계산불가';
@@ -58,6 +56,15 @@ export default function CenterDetailScreen({ route, navigation }) {
   const initialDaycare = route.params.daycare;
   const [daycare, setDaycare] = useState(initialDaycare);
   const [isDaycareLoading, setIsDaycareLoading] = useState(!initialDaycare.lat);
+  const hasMapCoordinates = Number.isFinite(Number(daycare.lat)) && Number.isFinite(Number(daycare.lng));
+  const detailMapMarkers = useMemo(() => hasMapCoordinates ? [{
+    id: daycare.stcode || daycare.id,
+    lat: Number(daycare.lat),
+    lng: Number(daycare.lng),
+    name: daycare.name,
+    district: daycare.office || daycare.addr?.split(' ')[1] || '',
+    color: daycare.color || '#75BA57'
+  }] : [], [daycare, hasMapCoordinates]);
   const { profile } = useAuth();
   const { colors, isDarkMode } = useTheme();
   const { updateDaycareRating, allJobs, toggleFavorite, isFavorited } = useSearch();
@@ -527,62 +534,23 @@ export default function CenterDetailScreen({ route, navigation }) {
         <View style={{ marginTop: 16, height: 180, borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }}>
           {!isReady ? (
             <ActivityIndicator color={colors.primary} />
+          ) : !hasMapCoordinates ? (
+            <Text style={{ color: colors.textSecondary }}>지도 좌표 정보가 없습니다.</Text>
           ) : (
-            <WebView
-              originWhitelist={['*']}
-              javaScriptEnabled={true}
-              domStorageEnabled={true}
-              mixedContentMode="always"
-              allowFileAccess={true}
-              allowUniversalAccessFromFileURLs={true}
-              source={{ html: `
-                <!DOCTYPE html>
-                <html>
-                <head>
-                  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-                  <style>
-                    body { margin: 0; padding: 0; background-color: ${colors.background}; }
-                    #map { width: 100%; height: 100vh; }
-                    ${isDarkMode ? `
-                    #map { filter: invert(90%) hue-rotate(180deg) brightness(105%) contrast(90%); }
-                    img[src*="copyright"] { filter: invert(100%) hue-rotate(180deg); }
-                    ` : ''}
-                  </style>
-                  <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=${KAKAO_KEY}"></script>
-                </head>
-                <body>
-                  <div id="map"></div>
-                  <script>
-                    var mapContainer = document.getElementById('map');
-                    var center = new kakao.maps.LatLng(${daycare.lat || 37.5665}, ${daycare.lng || 126.9780});
-                    var mapOption = { center: center, level: 3 };
-                    var map = new kakao.maps.Map(mapContainer, mapOption);
-                    
-                    var color = '${daycare.color || '#75BA57'}';
-                    var svg = '<svg width="32" height="40" viewBox="0 0 32 40" xmlns="http://www.w3.org/2000/svg">' +
-                              '<path d="M16 0C7.163 0 0 7.163 0 16c0 12 16 24 16 24s16-12 16-24c0-8.837-7.163-16-16-16z" fill="' + color + '" stroke="white" stroke-width="2"/>' +
-                              '<circle cx="16" cy="16" r="5" fill="white"/>' +
-                              '</svg>';
-                    var markerImage = new kakao.maps.MarkerImage(
-                        'data:image/svg+xml;base64,' + btoa(svg),
-                        new kakao.maps.Size(32, 40),
-                        { offset: new kakao.maps.Point(16, 40) }
-                    );
-
-                    var marker = new kakao.maps.Marker({ position: center, image: markerImage });
-                    marker.setMap(map);
-                  </script>
-                </body>
-                </html>
-              `, baseUrl: 'http://localhost' }}
-              containerStyle={{ borderRadius: 12 }}
-              scrollEnabled={true}
+            <KakaoMapWebView
+              center={{ lat: Number(daycare.lat), lng: Number(daycare.lng) }}
+              markers={detailMapMarkers}
+              isDarkMode={isDarkMode}
             />
           )}
         </View>
         <TouchableOpacity 
           style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background, padding: 12, borderRadius: 8, marginTop: 12, borderWidth: 1, borderColor: colors.border }}
           onPress={() => {
+            if (!hasMapCoordinates) {
+              Alert.alert('위치 정보 없음', '이 어린이집의 지도 좌표가 제공되지 않습니다.');
+              return;
+            }
             const url = Platform.OS === 'ios' 
               ? 'kakaomap://look?p=' + daycare.lat + ',' + daycare.lng
               : 'daummaps://look?p=' + daycare.lat + ',' + daycare.lng;
@@ -947,7 +915,7 @@ export default function CenterDetailScreen({ route, navigation }) {
       ) : (
         <ScrollView contentContainerStyle={styles.scroll}>
         <View style={styles.roadviewWrapper}>
-          <KakaoRoadview lat={daycare.lat || 37.5} lng={daycare.lng || 127.0} />
+          <KakaoRoadview lat={daycare.lat} lng={daycare.lng} />
           {/* Favorite Button */}
           <TouchableOpacity 
             style={styles.favBtn} 

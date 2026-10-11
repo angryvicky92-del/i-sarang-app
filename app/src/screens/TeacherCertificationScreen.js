@@ -44,21 +44,17 @@ export default function TeacherCertificationScreen({ navigation }) {
     try {
       // 1. Upload to Supabase Storage
       const fileExt = imageUri.split('.').pop() || 'jpg';
-      const fileName = `${session.user.id}_${Date.now()}.${fileExt}`;
-      const filePath = `certs/${fileName}`;
+      const safeExt = ['jpg', 'jpeg', 'png', 'webp'].includes(fileExt.toLowerCase()) ? fileExt.toLowerCase() : 'jpg';
+      const filePath = `${session.user.id}/${Date.now()}.${safeExt}`;
 
-      const { data: uploadData, error: uploadError } = await supabase.storage
+      const { error: uploadError } = await supabase.storage
         .from('certificates')
-        .upload(filePath, decode(imageBase64), { contentType: `image/${fileExt}` });
+        .upload(filePath, decode(imageBase64), { contentType: safeExt === 'jpg' ? 'image/jpeg' : `image/${safeExt}` });
 
       if (uploadError) throw uploadError;
 
-      // 2. Get Public URL
-      const { data: publicUrlData } = supabase.storage.from('certificates').getPublicUrl(filePath);
-      const imageUrl = publicUrlData.publicUrl;
-
-      // 3. Update Profile status via authService
-      const { data: updatedProfile, error: updateError } = await requestVerification(session.user.id, imageUrl);
+      // Store only the private object path. Admins view it through a short-lived signed URL.
+      const { data: updatedProfile, error: updateError } = await requestVerification(session.user.id, filePath);
       
       if (updateError) throw updateError;
 

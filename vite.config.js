@@ -26,7 +26,7 @@ export default defineConfig({
             if (id.includes('lexical') || id.includes('@lexical/')) {
               return 'vendor-lexical';
             }
-            if (id.includes('leaflet') || id.includes('react-leaflet') || id.includes('react-kakao-maps-sdk')) {
+            if (id.includes('react-kakao-maps-sdk')) {
               return 'vendor-map';
             }
             return 'vendor';

@@ -157,7 +157,7 @@ export const PostDetailScreen: React.FC<any> = ({ route, navigation }) => {
             colors={colors}
           />
 
-          <AdBanner />
+          <AdBanner style={{}} />
           
           <VerticalBox paddingHorizontal={20} style={{ marginTop: 20 }}>
             <Text style={[styles.commentsTitle, { color: colors.text }]}>댓글 {comments.length}</Text>

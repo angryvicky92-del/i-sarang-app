@@ -5,10 +5,9 @@ import { supabase } from './supabaseClient';
  * 콘텐츠(게시글, 댓글, 후기)에 대한 투표(추천/비추천)를 처리하는 통합 서비스
  * @param {string} targetType - 'post', 'comment', 'review'
  * @param {string|number} targetId - 콘텐츠 ID
- * @param {string} userId - 사용자 ID
  * @param {number} voteType - 1 (추천), -1 (비추천)
  */
-export const toggleVote = async (targetType, targetId, userId, voteType) => {
+export const toggleVote = async (targetType, targetId, voteType) => {
   if (!['post', 'comment', 'review'].includes(targetType)) return null;
 
   try {
@@ -17,7 +16,6 @@ export const toggleVote = async (targetType, targetId, userId, voteType) => {
     const { data, error } = await supabase.rpc('toggle_vote_rpc', {
       p_target_type: targetType,
       p_target_id: targetId,
-      p_user_id: userId,
       p_vote_type: voteType
     });
 

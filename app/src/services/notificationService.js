@@ -42,32 +42,19 @@ export const registerForPushNotificationsAsync = async (userId) => {
     }
 
     const token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
-    console.log('Push Token:', token);
-
-    // Save token to Supabase profile
+    // Save one registration per device without logging the sensitive token.
     if (userId) {
-      // Attempt to clear this token from any other accounts
-      // Note: This may fail silently due to RLS permissions (can't update others' rows)
-      try {
-        await supabase
-          .from('profiles')
-          .update({ push_token: null })
-          .eq('push_token', token)
-          .neq('id', userId);
-      } catch (e) {
-        console.warn('Attempt to clear old push tokens failed (likely RLS):', e.message);
-      }
-
       const { error } = await supabase
-        .from('profiles')
-        .update({ push_token: token })
-        .eq('id', userId);
+        .from('push_devices')
+        .upsert({
+          user_id: userId,
+          expo_push_token: token,
+          platform: Platform.OS || 'unknown',
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'expo_push_token' });
         
       if (error) {
-        if (error.code === '23505') {
-          console.warn('Push token already in use by another account. Multiple users on same device?');
-          // We can't do much from the client if RLS is strict, but we shouldn't crash.
-        } else {
+        if (error.code !== '23505') {
           console.error('Error saving push token to Supabase:', error.message);
     Toast.show({ type: 'error', text1: '오류 안내', text2: '데이터 처리 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.' });
         }
@@ -95,13 +82,15 @@ export const unregisterPushToken = async (userId) => {
     if (!userId) return;
     try {
         const { error } = await supabase
-            .from('profiles')
-            .update({ push_token: null })
-            .eq('id', userId);
-        if (error) console.error('Error unregistering push token:', error);
-    Toast.show({ type: 'error', text1: '오류 안내', text2: '데이터 처리 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.' });
+            .from('push_devices')
+            .delete()
+            .eq('user_id', userId);
+        if (error) {
+          console.error('Error unregistering push token:', error);
+          Toast.show({ type: 'error', text1: '오류 안내', text2: '알림 기기 등록 해제에 실패했습니다.' });
+        }
     } catch (e) {
         console.error('Unregister push token failed', e);
-    Toast.show({ type: 'error', text1: '오류 안내', text2: '데이터 처리 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.' });
+      Toast.show({ type: 'error', text1: '오류 안내', text2: '알림 기기 등록 해제에 실패했습니다.' });
     }
 };

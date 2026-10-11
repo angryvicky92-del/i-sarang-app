@@ -1,16 +1,39 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Map, MapMarker, MarkerClusterer, MapTypeControl, ZoomControl } from 'react-kakao-maps-sdk';
 import { useNavigate } from 'react-router-dom';
 import { List, X, Map as MapIcon } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { getDaycares, TYPE_COLORS } from '../services/dataService';
+import { AnimatePresence } from 'framer-motion';
+import { TYPE_COLORS } from '../services/dataService';
 import { useSearch } from '../contexts/SearchContext';
 import CenterBottomSheet from '../components/CenterBottomSheet';
+
+const CLUSTERER_STYLES = [{
+  width: '56px', height: '56px',
+  background: 'var(--primary)',
+  borderRadius: '28px',
+  color: '#fff',
+  textAlign: 'center',
+  fontWeight: '900',
+  fontSize: '16px',
+  lineHeight: '56px',
+  boxShadow: '0 6px 16px rgba(117,186,87,0.4)',
+  border: '3px solid white'
+}];
+
+const MARKER_IMAGE_SIZE = { width: 36, height: 44 };
+const MARKER_IMAGES = {
+  '국공립': { src: '/marker_yellow.svg', size: MARKER_IMAGE_SIZE },
+  '가정': { src: '/marker_orange.svg', size: MARKER_IMAGE_SIZE },
+  '민간': { src: '/marker_green.svg', size: MARKER_IMAGE_SIZE },
+  '직장': { src: '/marker_blue.svg', size: MARKER_IMAGE_SIZE },
+};
+const MARKER_IMAGE_DEFAULT = { src: '/marker_gray.svg', size: MARKER_IMAGE_SIZE };
+const EMPTY_DAYCARES = [];
 
 const HomeMap = () => {
   const { region } = useSearch();
   const navigate = useNavigate();
-  const daycares = region.daycares || [];
+  const daycares = region.daycares || EMPTY_DAYCARES;
   const [selectedId, setSelectedId] = useState(null);
   const [clusterList, setClusterList] = useState(null);
   const [isSdkLoaded, setIsSdkLoaded] = useState(!!window.kakao?.maps);
@@ -22,10 +45,34 @@ const HomeMap = () => {
     return () => window.removeEventListener('kakaoMapReady', handleSdkReady);
   }, []);
 
-  const center = React.useMemo(() => ({
-    lat: daycares[0]?.lat || region.center?.lat || 37.5665,
-    lng: daycares[0]?.lng || region.center?.lng || 126.9780
-  }), [daycares[0]?.id, region.center?.lat]);
+  const firstDaycare = daycares[0];
+  const center = useMemo(() => ({
+    lat: firstDaycare?.lat || region.center?.lat || 37.5665,
+    lng: firstDaycare?.lng || region.center?.lng || 126.9780
+  }), [firstDaycare, region.center?.lat, region.center?.lng]);
+
+  const daycareById = useMemo(() => {
+    const lookup = {};
+    daycares.forEach(daycare => { lookup[daycare.id] = daycare; });
+    return lookup;
+  }, [daycares]);
+
+  const handleClusterclick = useCallback((_, cluster) => {
+    const clusteredDaycares = cluster.getMarkers()
+      .map(marker => daycareById[marker.getTitle()])
+      .filter(Boolean);
+    setClusterList(clusteredDaycares);
+  }, [daycareById]);
+
+  const markers = useMemo(() => daycares.map(daycare => (
+    <MapMarker
+      key={daycare.id}
+      position={{ lat: daycare.lat, lng: daycare.lng }}
+      title={daycare.id}
+      image={MARKER_IMAGES[daycare.type] || MARKER_IMAGE_DEFAULT}
+      onClick={() => setSelectedId(daycare.id)}
+    />
+  )), [daycares]);
 
   return (
     <div style={{ width: '100%', height: '100vh', position: 'relative', background: '#F3F4F6' }}>
@@ -54,38 +101,10 @@ const HomeMap = () => {
             averageCenter={true}
             minLevel={5}
             disableClickZoom={true}
-            styles={[{
-              width: '56px', height: '56px',
-              background: 'var(--primary)',
-              borderRadius: '28px',
-              color: '#fff',
-              textAlign: 'center',
-              fontWeight: '900',
-              fontSize: '16px',
-              lineHeight: '56px',
-              boxShadow: '0 6px 16px rgba(117,186,87,0.4)',
-              border: '3px solid white'
-            }]}
-            onClusterclick={(_, cluster) => {
-              const markers = cluster.getMarkers().map(m => {
-                const id = m.getTitle();
-                return daycares.find(d => d.id === id);
-              }).filter(Boolean);
-              setClusterList(markers);
-            }}
+            styles={CLUSTERER_STYLES}
+            onClusterclick={handleClusterclick}
           >
-            {daycares.map((daycare, index) => (
-              <MapMarker
-                key={daycare.id || index}
-                position={{ lat: daycare.lat, lng: daycare.lng }}
-                title={daycare.id}
-                image={{
-                  src: `/marker_${daycare.type === '국공립' ? 'yellow' : daycare.type === '가정' ? 'orange' : daycare.type === '민간' ? 'green' : daycare.type === '직장' ? 'blue' : 'gray'}.svg`,
-                  size: { width: 36, height: 44 },
-                }}
-                onClick={() => setSelectedId(daycare.id)}
-              />
-            ))}
+            {markers}
           </MarkerClusterer>
         </Map>
       )}

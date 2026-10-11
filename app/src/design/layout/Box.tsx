@@ -12,6 +12,7 @@ interface BoxProps extends ViewProps {
   alignItems?: ViewStyle['alignItems'];
   justifyContent?: ViewStyle['justifyContent'];
   flex?: number;
+  flexWrap?: ViewStyle['flexWrap'];
 }
 
 /**
@@ -29,6 +30,7 @@ export const VerticalBox: React.FC<BoxProps> = ({
   alignItems, 
   justifyContent, 
   flex, 
+  flexWrap,
   style, 
   ...props 
 }) => {
@@ -42,6 +44,7 @@ export const VerticalBox: React.FC<BoxProps> = ({
     alignItems,
     justifyContent,
     flex,
+    flexWrap,
   };
 
   return (
@@ -71,6 +74,7 @@ export const HorizontalBox: React.FC<BoxProps> = ({
   alignItems, 
   justifyContent, 
   flex, 
+  flexWrap,
   style, 
   ...props 
 }) => {
@@ -84,6 +88,7 @@ export const HorizontalBox: React.FC<BoxProps> = ({
     alignItems: alignItems || 'center',
     justifyContent,
     flex,
+    flexWrap,
   };
 
   return (

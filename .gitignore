@@ -8,6 +8,7 @@ pnpm-debug.log*
 lerna-debug.log*
 
 node_modules
+.firebase/
 dist
 dist-ssr
 *.local
@@ -23,3 +24,9 @@ dist-ssr
 *.sln
 *.sw?
 .env
+
+# Expo local state and generated exports
+.expo/
+app/.expo/
+app/.codex-export*/
+app/.codex-*/

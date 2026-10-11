@@ -1,4 +1,5 @@
 import React from 'react';
+import Constants from 'expo-constants';
 import { View, Text, StyleSheet, Switch, TouchableOpacity, ScrollView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ChevronLeft, Bell, MessageSquare, Briefcase, Info, Moon, Sun, MapPin, ChevronRight } from 'lucide-react-native';
@@ -134,7 +135,7 @@ export default function SettingsScreen({ navigation }) {
         />
 
         <View style={styles.footerInfo}>
-          <Text style={[styles.versionText, { color: colors.textMuted }]}>버전 정보 1.0.4 (최신)</Text>
+          <Text style={[styles.versionText, { color: colors.textMuted }]}>버전 정보 {Constants.expoConfig?.version || '1.0.30'}</Text>
         </View>
       </ScrollView>
 

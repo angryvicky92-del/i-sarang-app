@@ -15,7 +15,7 @@ import EngagementButtons from '../components/EngagementButtons';
 import UserActionModal from '../components/UserActionModal';
 import { getOrCreateChat } from '../services/chatService';
 
-const KAKAO_JS_KEY = 'dc33fe7753b02b59868630ccbfd7b820';
+const KAKAO_JS_KEY = process.env.EXPO_PUBLIC_KAKAO_JS_KEY;
 
 export default function PlaceDetailScreen({ route, navigation }) {
   const { place } = route.params;

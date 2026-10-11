@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '../services/supabaseClient';
 import { useAuth } from './AuthContext';
 import { getTotalUnreadCount, markMessagesAsRead } from '../services/chatService';
@@ -25,7 +25,7 @@ export const ChatProvider = ({ children }) => {
     }
     const count = await getTotalUnreadCount(profile.id);
     setUnreadCount(count);
-  }, [profile]);
+  }, [profile?.id]);
 
   useEffect(() => {
     // Initial fetch and subscription setup
@@ -50,28 +50,14 @@ export const ChatProvider = ({ children }) => {
           }
         }
       )
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'chat_messages',
-        },
-        (payload) => {
-          // If any message in the system was marked as read, refresh our count
-          if (payload.new.is_read) {
-            fetchUnreadCount();
-          }
-        }
-      )
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [profile, activeChatId, fetchUnreadCount]);
+  }, [profile?.id, activeChatId, fetchUnreadCount]);
 
-  const updateActiveChat = async (chatId) => {
+  const updateActiveChat = useCallback(async (chatId) => {
     setActiveChatId(chatId);
     if (chatId && profile?.id) {
       // Ensure mark as read completes before refreshing count
@@ -80,10 +66,17 @@ export const ChatProvider = ({ children }) => {
         fetchUnreadCount();
       }
     }
-  };
+  }, [profile?.id, fetchUnreadCount]);
+
+  const value = useMemo(() => ({
+    unreadCount,
+    fetchUnreadCount,
+    activeChatId,
+    updateActiveChat
+  }), [unreadCount, fetchUnreadCount, activeChatId, updateActiveChat]);
 
   return (
-    <ChatContext.Provider value={{ unreadCount, fetchUnreadCount, activeChatId, updateActiveChat }}>
+    <ChatContext.Provider value={value}>
       {children}
     </ChatContext.Provider>
   );

@@ -231,7 +231,6 @@ export default function JobOffersScreen({ navigation }) {
                   <View style={styles.infoRow}><Eye size={12} color={colors.textMuted} /><Text style={[styles.infoText, { color: colors.textSecondary }]}>{item.views || 0}</Text></View>
                 </View>
               </TouchableOpacity>
-              {(index + 1) % 5 === 0 && <AdBanner style={{ marginHorizontal: 16, marginBottom: 16 }} />}
             </>
           )}
         />

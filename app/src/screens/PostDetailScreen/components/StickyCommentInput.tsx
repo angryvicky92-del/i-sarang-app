@@ -28,10 +28,10 @@ export const StickyCommentInput: React.FC<StickyCommentInputProps> = ({
           borderTopColor: colors.border, 
           backgroundColor: colors.card, 
           paddingBottom: insets.bottom + 10 
-        }
+        },
+        { paddingTop: 12 }
       ]}
       paddingHorizontal={16}
-      style={{ paddingTop: 12 }}
     >
       <TextInput
         style={[styles.stickyInput, { backgroundColor: colors.cardSecondary, color: colors.text }]}
@@ -40,7 +40,6 @@ export const StickyCommentInput: React.FC<StickyCommentInputProps> = ({
         value={value}
         onChangeText={onChange}
         multiline
-        maxHeight={100}
         accessibilityLabel="댓글 입력창"
       />
       <TouchableOpacity 
@@ -79,7 +78,8 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     fontSize: 15,
     marginRight: 10,
-    minHeight: 40
+    minHeight: 40,
+    maxHeight: 100
   },
   sendCircle: {
     width: 40,
